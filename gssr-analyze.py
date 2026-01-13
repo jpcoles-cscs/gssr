@@ -1,3 +1,13 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.6"
+# dependencies = [
+#   "numpy",
+#   "matplotlib",
+#   "pandas",
+# ]
+# ///
+
 import sys,os
 import argparse
 import numpy as np
