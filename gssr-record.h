@@ -67,7 +67,6 @@ typedef struct
     char *slurm_ngpus;
     int rank0;
     int local0;
-    char *visible_devices;
     int ntasks;
     int with_slurm;
     int ngpus;
@@ -93,8 +92,6 @@ void help();
 void write_meta(FILE *fp, cmdargs_t *args, jobenv_t *jobenv);
 int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdargs_t *args);
 void parse_args(int argc, char **argv, cmdargs_t *args);
-void visible_devices(dcgmHandle_t handle, jobenv_t *jobenv, unsigned int *visible, int *numDevices);
-int parse_cuda_visible_devices(char *in, unsigned int *out, int max);
 void job_environment(jobenv_t *je);
 void run_tests();
 

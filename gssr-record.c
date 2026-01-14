@@ -119,34 +119,6 @@ void install_signal_handler()
 }
 
 // ==========================================================================
-// parse_cuda_visible_devices - Extract GPU devices from a list
-//
-// in  - string like $CUDA_VISIBLE_DEVICES
-// out - allocated array of ints
-// max - size of out
-//
-// Returns number of visible devices found and stored in out.
-// ==========================================================================
-int parse_cuda_visible_devices(char *in, unsigned int *out, int max)
-{
-    char *env = in;
-    if (!env || !*env)
-        return 0;
-
-    char *tmp = strdup(env);
-    char *tok = strtok(tmp, ",");
-    int n = 0;
-
-    while (tok && n < max) {
-        out[n++] = atoi(tok);
-        tok = strtok(NULL, ",");
-    }
-
-    free(tmp);
-    return n;
-}
-
-// ==========================================================================
 // job_environment - Examine envvars and extract SLURM and job related values.
 //
 // je - the jobenv_t struct to fill in
@@ -165,12 +137,6 @@ void job_environment(jobenv_t *je)
     je->slurm_nnodes  = getenv("SLURM_JOB_NUM_NODES");
     je->slurm_ntasks  = getenv("SLURM_NTASKS");
     je->slurm_ngpus   = getenv("SLURM_GPUS_ON_NODE");
-
-    je->visible_devices = getenv("SLURM_STEP_GPUS");
-    if (!je->visible_devices)
-    {
-        je->visible_devices = getenv("CUDA_VISIBLE_DEVICES");
-    }
 
     je->with_slurm = je->slurm_jobname != NULL;
 
@@ -193,35 +159,6 @@ void job_environment(jobenv_t *je)
 
     je->rank0  = !strncmp("0", je->slurm_rank, strlen(je->slurm_rank));
     je->local0 = !strncmp("0", je->slurm_localid, strlen(je->slurm_localid));
-}
-
-// ==========================================================================
-// visible_devices - Find devices that we should monitor.
-//
-// Original behavior:
-// The list of devices will first try to come from CUDA_VISIBLE_DEVICES
-// if it was set in the environment, otherwise we will ask DCGM for the
-// devices it supports.
-//
-// Current behavior:
-// All devices on a node will be monitored. From the point of view of scoring
-// the best use of available resources this makes more sense.
-//
-// handle - DCGM handle
-// jobenv - completed jobenv_t of what we already found
-// visible - array of ints to fill in
-// numDevices - number of devices found by this function.
-//
-// Returns nothing
-// ==========================================================================
-void visible_devices(dcgmHandle_t handle, jobenv_t *jobenv, unsigned int *visible, int *numDevices)
-{
-    //*numDevices = parse_cuda_visible_devices(jobenv->visible_devices, visible, MAX_GPUS);
-    *numDevices = 0;
-    if (*numDevices == 0)
-    {
-        CHECK_DCGM(dcgmGetAllSupportedDevices(handle, visible, numDevices));
-    }
 }
 
 // ==========================================================================
@@ -307,8 +244,8 @@ void parse_args(int argc, char **argv, cmdargs_t *args)
 // record_count - current number of items in records. Will be updated.
 // timestamp - timestamp to associate with new records
 // then, now - time window for DCGM request (in seconds)
-// visible - list of devices to measure
-// numVisible - size of visible array
+// devices - list of devices to measure
+// numDevices - size of devices array
 //
 // Returns nothing
 // ==========================================================================
@@ -317,7 +254,7 @@ void record_metrics(dcgmHandle_t handle,
                     int *record_count, 
                     time_t timestamp, 
                     time_t then, time_t now, 
-                    unsigned int *visible, int numVisible)
+                    unsigned int *devices, int numDevices)
 {
     dcgmFieldSummaryRequest_t req = {0};
 
@@ -331,15 +268,15 @@ void record_metrics(dcgmHandle_t handle,
     req.startTime = then * 1000000;
     req.endTime   = now  * 1000000;
 
-    for (int gpu_idx = 0; gpu_idx < numVisible; gpu_idx++)
+    for (int gpu_idx = 0; gpu_idx < numDevices; gpu_idx++)
     {
         records[*record_count]       = (record_t){0};
         records[*record_count].ts    = timestamp;
-        records[*record_count].gpuId = visible[gpu_idx];
+        records[*record_count].gpuId = devices[gpu_idx];
 
         for (int field_idx=0; field_idx < numFields; field_idx++)
         {
-            req.entityId = visible[gpu_idx];
+            req.entityId = devices[gpu_idx];
             req.fieldId  = fieldIds[field_idx];
 
             if (dcgmGetFieldSummary(handle, &req) != DCGM_ST_OK) {
@@ -864,17 +801,16 @@ int main(int argc, char **argv)
                                     "metrics",
                                     &fieldGroup));
 
-    /* Slurm-visible GPUs */
-    unsigned int visible[MAX_GPUS];
-    int numVisible;
+    unsigned int devices[MAX_GPUS];
+    int numDevices;
 
-    visible_devices(handle, &jobenv, visible, &numVisible);
+    CHECK_DCGM(dcgmGetAllSupportedDevices(handle, devices, &numDevices));
 
-    jobenv.ngpus = numVisible;
+    jobenv.ngpus = numDevices;
 
-    for (int i = 0; i < numVisible; i++) 
+    for (int i = 0; i < numDevices; i++) 
     {
-        CHECK_DCGM(dcgmGroupAddDevice(handle, gpuGroup, visible[i]));
+        CHECK_DCGM(dcgmGroupAddDevice(handle, gpuGroup, devices[i]));
     }
 
     CHECK_DCGM(dcgmWatchFields(handle, gpuGroup, fieldGroup, 1000000/2, 4, 0));
@@ -905,7 +841,7 @@ int main(int argc, char **argv)
 
         time_t now = time(NULL);
 
-        record_metrics(handle, records, &record_count, now-start, then, now, visible, numVisible);
+        record_metrics(handle, records, &record_count, now-start, then, now, devices, numDevices);
 
         then = now;
 

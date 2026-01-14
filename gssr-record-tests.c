@@ -87,110 +87,6 @@ void test_job_environment()
 #define ASSERT_CLEAN(cond, label) \
     if (!(cond)) { fprintf(stderr, "Assert failed on %s:%i\n", __FILE__, __LINE__); goto label;}
 
-void test_parse_cuda_visible_devices()
-{
-    {
-    char *str = "0,1,2,3";
-    unsigned int visible[MAX_GPUS] = {0};
-    int numVisible = 0;
-    numVisible = parse_cuda_visible_devices(str, visible, MAX_GPUS);
-    assert(numVisible == 4);
-    assert(visible[0] == 0);
-    assert(visible[1] == 1);
-    assert(visible[2] == 2);
-    assert(visible[3] == 3);
-    }
-
-    {
-    char *str = "0";
-    unsigned int visible[MAX_GPUS] = {0};
-    int numVisible = 0;
-    numVisible = parse_cuda_visible_devices(str, visible, MAX_GPUS);
-    assert(numVisible == 1);
-    }
-
-    {
-    char *str = "";
-    unsigned int visible[MAX_GPUS] = {0};
-    int numVisible = 10;
-    numVisible = parse_cuda_visible_devices(str, visible, MAX_GPUS);
-    assert(numVisible == 0);
-    }
-
-    {
-    char *str = ",";
-    unsigned int visible[MAX_GPUS] = {0};
-    int numVisible = 10;
-    numVisible = parse_cuda_visible_devices(str, visible, MAX_GPUS);
-    assert(numVisible == 0);
-    }
-}
-
-void test_visible_devices()
-{
-    dcgmHandle_t handle;
-    CHECK_DCGM(dcgmInit());
-    CHECK_DCGM(dcgmConnect("127.0.0.1", &handle));
-
-    int success = 0;
-
-    {
-    jobenv_t je;
-    je.visible_devices = "0,1,2,3";
-    unsigned int visible[MAX_GPUS] = {0};
-    int numVisible = 0;
-    visible_devices(handle, &je, visible, &numVisible);
-    ASSERT_CLEAN(numVisible == 4, shutdown);
-    ASSERT_CLEAN(visible[0] == 0, shutdown);
-    ASSERT_CLEAN(visible[1] == 1, shutdown);
-    ASSERT_CLEAN(visible[2] == 2, shutdown);
-    ASSERT_CLEAN(visible[3] == 3, shutdown);
-    }
-
-    // Removed this test because we detect the number of GPUs 
-    // in the system and report on all of them.
-    // {
-    // jobenv_t je;
-    // je.visible_devices = "0";
-    // unsigned int visible[MAX_GPUS] = {0};
-    // int numVisible = 0;
-    // visible_devices(handle, &je, visible, &numVisible);
-    // ASSERT_CLEAN(numVisible == 1, shutdown);
-    // ASSERT_CLEAN(visible[0] == 0, shutdown);
-    // }
-
-    // {
-    // jobenv_t je;
-    // je.visible_devices = "3";
-    // unsigned int visible[MAX_GPUS] = {0};
-    // int numVisible = 0;
-    // visible_devices(handle, &je, visible, &numVisible);
-    // ASSERT_CLEAN(numVisible == 1, shutdown);
-    // ASSERT_CLEAN(visible[0] == 3, shutdown);
-    // }
-
-    {
-    jobenv_t je;
-    je.visible_devices = "";
-    unsigned int visible[MAX_GPUS] = {0};
-    int numVisible = 0;
-    visible_devices(handle, &je, visible, &numVisible);
-    ASSERT_CLEAN(numVisible == 4, shutdown);
-    ASSERT_CLEAN(visible[0] == 0, shutdown);
-    ASSERT_CLEAN(visible[1] == 1, shutdown);
-    ASSERT_CLEAN(visible[2] == 2, shutdown);
-    ASSERT_CLEAN(visible[3] == 3, shutdown);
-    }
-
-    success = 1;
-
-shutdown:
-    dcgmDisconnect(handle);
-    dcgmShutdown();
-
-    if (!success) exit(1);
-}
-
 void test_parse_args()
 {
     {
@@ -331,7 +227,6 @@ void test_create_output_location()
             .slurm_jobname = "test",
             .rank0 = 0,
             .local0 = 1,
-            .visible_devices="1,2,3,4",
             .with_slurm = 1
         };
         cmdargs_t args = (cmdargs_t){
@@ -357,7 +252,6 @@ void test_create_output_location()
             .slurm_jobname = "test",
             .rank0 = 0,
             .local0 = 1,
-            .visible_devices="1,2,3,4",
             .with_slurm = 1
         };
         cmdargs_t args = (cmdargs_t){
@@ -383,7 +277,6 @@ void test_create_output_location()
             .slurm_jobname = "test",
             .rank0 = 0,
             .local0 = 1,
-            .visible_devices="1,2,3,4",
             .with_slurm = 1
         };
         cmdargs_t args = (cmdargs_t){
@@ -411,7 +304,6 @@ void test_write_meta()
             .slurm_jobname = "test",
             .rank0 = 0,
             .local0 = 1,
-            .visible_devices="1,2,3,4",
             .slurm_cluster = "test-cluster",
             .slurm_nnodes = "4",
             .slurm_ntasks = "128",
@@ -456,8 +348,6 @@ void test_version()
 void run_tests()
 {
     test_job_environment();
-    test_parse_cuda_visible_devices();
-    test_visible_devices();
     test_parse_args();
     test_create_output_location();
     test_write_records();
