@@ -8,13 +8,22 @@
 # ]
 # ///
 
+#
+# Generate a PDF file from GPU metrics recorded by gssr-record.
+#
+# Run gssr-analyze --help for usage.
+#
+# Written by Jonathan Coles <jonathan.coles@cscs.ch>
+#
+
 import sys,os
 import argparse
-import numpy as np
-import pandas as pd
 import json
 import textwrap
 import copy
+
+import numpy as np
+import pandas as pd
 from matplotlib import cm
 import matplotlib.pyplot as pl
 from matplotlib.backends.backend_pdf import PdfPages
@@ -247,8 +256,6 @@ def plot_active_metrics(ax, df):
         
         # Plot the actual y line over the shaded area
         ax[0].plot(x, y_avg, label=metric, color=c, linewidth=1.0)
-        ax[0].set_xlabel('Time (s)')
-        ax[0].set_ylabel(f'GPU activity (%)', labelpad=10)
 
         # Create the distribution plot (right)
         n_bins = 20 #min(100, max(10, int(np.ceil(np.sqrt(len(y_avg))))))
@@ -259,7 +266,9 @@ def plot_active_metrics(ax, df):
         xeps = rng.integers(low=0, high=2, size=len(y))
         ax[1].plot(y + yeps, bins[0:-1] + xeps, alpha=0.8, color=c, lw=1.0, drawstyle='steps')
 
-    ax[0].set_ylim(ymin=0, ymax=100)
+    ax[0].set_xlabel('Time (s)')
+    ax[0].set_ylabel(f'GPU activity (%)', labelpad=10)
+    ax[0].set_ylim(ymin=0, ymax=105)
 
     ax[1].set_title('Histogram', fontsize=6)
     ax[1].set_xlabel('% of Runtime')
@@ -324,7 +333,7 @@ def plot_sm_metrics(ax, df):
 
     ax[0].set_xlabel('Time (s)')
     ax[0].set_ylabel(f'SM Usage (%)', labelpad=10)
-    ax[0].set_ylim(ymin=0, ymax=100)
+    ax[0].set_ylim(ymin=0, ymax=105)
     
     ax[1].set_title('Histogram', fontsize=6)
     ax[1].set_xlabel('% of Runtime')
