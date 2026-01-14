@@ -3,6 +3,11 @@
 set -x
 #set -e
 
+make clean
+make clean-tests
+make
+make install-uv
+
 ./gssr-record -h
 ./gssr-record --help
 ./gssr-record --version
