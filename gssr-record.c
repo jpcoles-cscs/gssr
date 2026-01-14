@@ -537,7 +537,7 @@ void version()
 void help()
 {
     printf(
-        "Usage: jr [OPTIONS] <cmd> [args...]\n"
+        "Usage: "PROGNAME" [OPTIONS] <cmd> [args...]\n"
         "Run cmd and record GPU metrics. Results can be given to the\n" 
         "GPU saturation scorer (GSSR) to produce a report for CSCS project proposals.\n"
         "\n"
