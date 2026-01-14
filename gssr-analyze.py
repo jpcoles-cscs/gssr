@@ -19,6 +19,8 @@ from matplotlib import cm
 import matplotlib.pyplot as pl
 from matplotlib.backends.backend_pdf import PdfPages
 
+# Random Number Generator used to add a little noise to the histrogram
+# to increase legibility when bars overlap.
 rng = np.random.default_rng()
 
 
@@ -89,6 +91,21 @@ def load_csv_tree(root, label_column='source'):
     return df, metadf
 
 def plot_memory_metrics(ax, df):
+    """
+    Plot the GPU memory usage metrics.
+
+    Parameters
+    ----------
+    ax : np.array
+        1x2 array of Axes objects
+    df : pandas.DataFrame
+        DataFrame containing all metrics
+
+    Returns
+    -------
+    None
+    """
+
 
     cfg = [
         ['DCGM_FI_DEV_FB_FREE_avg',     1e-3, 'g',        'Free'], 
@@ -133,6 +150,20 @@ def plot_memory_metrics(ax, df):
     ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
 
 def plot_txrx_metrics(ax, df):
+    """
+    Plot the GPU data transmission metrics like PCIe and NVlink
+
+    Parameters
+    ----------
+    ax : np.array
+        1x2 array of Axes objects
+    df : pandas.DataFrame
+        DataFrame containing all metrics
+
+    Returns
+    -------
+    None
+    """
 
     cfg = [
         ['DCGM_FI_PROF_PCIE_TX_BYTES_avg',      1e-6, 'g',        'PCIe Send'], 
@@ -176,6 +207,20 @@ def plot_txrx_metrics(ax, df):
     ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
 
 def plot_active_metrics(ax, df):
+    """
+    Plot the GPU utilization and Tensor/FP metrics.
+
+    Parameters
+    ----------
+    ax : np.array
+        1x2 array of Axes objects
+    df : pandas.DataFrame
+        DataFrame containing all metrics
+
+    Returns
+    -------
+    None
+    """
 
     cfg = [
         ['DCGM_FI_DEV_GPU_UTIL_avg',              1, 'k', 'GPU Util'], 
@@ -228,6 +273,20 @@ def plot_active_metrics(ax, df):
     ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
 
 def plot_sm_metrics(ax, df):
+    """
+    Plot the GPU SM active and occupancy metrics.
+
+    Parameters
+    ----------
+    ax : np.array
+        1x2 array of Axes objects
+    df : pandas.DataFrame
+        DataFrame containing all metrics
+
+    Returns
+    -------
+    None
+    """
 
     cfg = [
         ['DCGM_FI_PROF_SM_ACTIVE_avg',      100, 'g', 'SM Active'], 
@@ -279,6 +338,20 @@ def plot_sm_metrics(ax, df):
     ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
 
 def title_page_table(ax, metadf):
+    """
+    Draw a page on the title page containing job metadata.
+
+    Parameters
+    ----------
+    ax : Axes
+        A single axis covering the A4 page.
+    metadf : pandas.DataFrame
+        DataFrame containing job metadata.
+
+    Returns
+    -------
+    None
+    """
 
     wrap_width = 45  # wrap lines at 30 characters
 
@@ -330,6 +403,22 @@ def title_page_table(ax, metadf):
 
 
 def title_page(pdf, df, metadf):
+    """
+    Draw the title page.
+
+    Parameters
+    ----------
+    pdf : 
+        The open pdf file handle to save the title page figure into.
+    df : pandas.DataFrame
+        DataFrame containing job metrics.
+    metadf : pandas.DataFrame
+        DataFrame containing job metadata.
+
+    Returns
+    -------
+    None
+    """
 
     fig, axes = pl.subplots(nrows=1, ncols=1, figsize=(8, 11), squeeze=False)
     ax = axes[0,0]
@@ -369,6 +458,20 @@ def title_page(pdf, df, metadf):
     pass
 
 def definitions_page(pdf, df):
+    """
+    Make a table containing the definition of terms used in the report.
+
+    Parameters
+    ----------
+    pdf : 
+        The open pdf file handle to save the title page figure into.
+    df : pandas.DataFrame
+        DataFrame containing job metrics.
+
+    Returns
+    -------
+    None
+    """
 
     fig, axes = pl.subplots(nrows=1, ncols=1, figsize=(8, 11), squeeze=False)
     ax = axes[0,0]
@@ -439,6 +542,20 @@ def definitions_page(pdf, df):
     pass
 
 def plots(pdf, df):
+    """
+    Draw all the time-series plots of summarized GPU metrics.
+
+    Parameters
+    ----------
+    pdf : 
+        The open pdf file handle to save the title page figure into.
+    df : pandas.DataFrame
+        DataFrame containing job metrics.
+
+    Returns
+    -------
+    None
+    """
 
     pl.rcParams.update({
         'font.family': 'sans-serif',
@@ -495,38 +612,21 @@ def reduced_df(df):
 
     return agg_df
 
-def plot_active_metrics_hm(axes, df):
-
-    cfg = [
-        ['DCGM_FI_PROF_PIPE_TENSOR_ACTIVE_avg', 100, 'm', 'Tensor', 'Purples'], 
-        ['DCGM_FI_PROF_PIPE_FP64_ACTIVE_avg',   100, 'r', 'fp64',   'Reds'],
-        ['DCGM_FI_PROF_PIPE_FP32_ACTIVE_avg',   100, 'g', 'fp32',   'Greens'],
-        ['DCGM_FI_PROF_PIPE_FP16_ACTIVE_avg',   100, 'b', 'fp16',   'Blues'],
-        ]
-
-
-    for i,[metric,scale,c,label,cmap] in enumerate(cfg):
-        ax1 = axes[i,0]
-        xy = df.pivot(
-            index=['proc', 'gpuId'],   # unique GPU identifier
-            columns='timestamp',       # columns = time
-            values=metric              # values to populate the matrix
-        )
-        xy = xy.fillna(0.0).to_numpy() * scale
-    
-        clrs = copy.copy(cm.get_cmap(cmap))
-        clrs.set_under('white')
-
-        # Plot the actual y line over the shaded area
-        im = ax1.imshow(xy, aspect='auto', interpolation='nearest', origin='upper', extent=(-0.5, xy.shape[1] - 0.5, xy.shape[0] - 0.5, -0.5),
-                   vmin=1, vmax=100, cmap=clrs)
-        cbar = pl.colorbar(im, ax=ax1, extend='both')
-
-        ax1.set_xlabel('Time (s)')
-        ax1.set_ylabel(f'GPU Index', labelpad=10)
-        ax1.set_title(f'{label} activity (%)')
-
 def heatmaps(pdf, df):
+    """
+    Draw a page of heatmaps for the Tensor and FP metrics
+
+    Parameters
+    ----------
+    pdf : 
+        The open pdf file handle to save the title page figure into.
+    df : pandas.DataFrame
+        DataFrame containing job metrics.
+
+    Returns
+    -------
+    None
+    """
 
     pl.rcParams.update({
         'font.family': 'sans-serif',
@@ -559,15 +659,55 @@ def heatmaps(pdf, df):
         #fontweight='bold'
     )
 
-    #plot_memory_metrics(axes[0,:], df)
-    plot_active_metrics_hm(axes, df)
-    #plot_sm_metrics(axes[2,:], df)
-    #plot_txrx_metrics(axes[3,:], df)
+    cfg = [
+        ['DCGM_FI_PROF_PIPE_TENSOR_ACTIVE_avg', 100, 'm', 'Tensor', 'Purples'], 
+        ['DCGM_FI_PROF_PIPE_FP64_ACTIVE_avg',   100, 'r', 'fp64',   'Reds'],
+        ['DCGM_FI_PROF_PIPE_FP32_ACTIVE_avg',   100, 'g', 'fp32',   'Greens'],
+        ['DCGM_FI_PROF_PIPE_FP16_ACTIVE_avg',   100, 'b', 'fp16',   'Blues'],
+        ]
+
+
+    for i,[metric,scale,c,label,cmap] in enumerate(cfg):
+        ax1 = axes[i,0]
+        xy = df.pivot(
+            index=['proc', 'gpuId'],   # unique GPU identifier
+            columns='timestamp',       # columns = time
+            values=metric              # values to populate the matrix
+        )
+        xy = xy.fillna(0.0).to_numpy() * scale
+    
+        clrs = copy.copy(cm.get_cmap(cmap))
+        clrs.set_under('white')
+
+        # Plot the actual y line over the shaded area
+        im = ax1.imshow(xy, aspect='auto', interpolation='nearest', origin='upper', extent=(-0.5, xy.shape[1] - 0.5, xy.shape[0] - 0.5, -0.5),
+                   vmin=1, vmax=100, cmap=clrs)
+        cbar = pl.colorbar(im, ax=ax1, extend='both')
+
+        ax1.set_xlabel('Time (s)')
+        ax1.set_ylabel(f'GPU Index', labelpad=10)
+        ax1.set_title(f'{label} activity (%)')
 
     pdf.savefig(fig)
     pl.close(fig)
 
 def report(metadf, df, fname):
+    """
+    Create the report.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing job metrics.
+    metadf : pandas.DataFrame
+        DataFrame containing job metadata.
+    fname : 
+        The filename to use for the PDF report.
+
+    Returns
+    -------
+    None
+    """
     with PdfPages(fname) as pdf:
 
         stepdf = df
@@ -583,6 +723,18 @@ def report(metadf, df, fname):
     print(f'Saved PDF report to {fname}')
 
 def main(args):
+    """
+    Main driver to parse arguments, load data, and make the report
+
+    Parameters
+    ----------
+    args : 
+        Command line arguments.
+
+    Returns
+    -------
+    None
+    """
     args = parse_args(args)
 
     if not os.path.exists(args.input):
@@ -600,6 +752,18 @@ def main(args):
 
 
 def parse_args(args):
+    """
+    Parse commandline arguments
+
+    Parameters
+    ----------
+    args : 
+        Command line arguments.
+
+    Returns
+    -------
+    argparse.Namespace
+    """
     parser = argparse.ArgumentParser(
         description='Generate a report from GPU metrics collected with gssr-record.'
     )
