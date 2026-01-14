@@ -21,6 +21,8 @@ import argparse
 import json
 import textwrap
 import copy
+import glob
+import re
 
 import numpy as np
 import pandas as pd
@@ -33,69 +35,75 @@ from matplotlib.backends.backend_pdf import PdfPages
 rng = np.random.default_rng()
 
 
-def load_csv_tree(root, label_column='source'):
+def load_metrics_and_meta(paths): 
     """
     Walk a directory tree and load all CSV files into a single DataFrame.
 
     Parameters
     ----------
-    root : str
-        Root directory to walk.
-    label_column : str
-        Name of the column used to label rows by filename.
+    paths : list
+        List of directories to look for metric data
 
     Returns
     -------
-    pandas.DataFrame
+    pandas.DataFrame, pandas.DataFrame
     """
     frames = []
     meta = []
 
-    for dirpath, dirnames, filenames in os.walk(root):
-        for name in filenames:
-            path = os.path.join(dirpath, name)
+    for path in paths:
 
-            if name.lower().endswith('meta.txt'):
+        steps = glob.glob(os.path.join(path, 'step_*'))
 
-                print(f'Found metatdata {name}')
-                with open(path) as f:
-                    df = pd.DataFrame([json.load(f)])
-                    label = f'{dirpath}_{name}'
-                    df[label_column] = label
-                    meta.append(df)
+        for step in steps:
+
+            meta_files = glob.glob(os.path.join(step, 'proc_*.meta.txt'))
+            proc_files = glob.glob(os.path.join(step, 'proc_*.csv'))
+
+            if len(meta_files) == 0:
+                print(f'Missing metadata file in {step}. Skipping.')
                 continue
 
-            if not name.lower().endswith('.csv'):
+            if len(meta_files) > 1:
+                print(f'Too many metadata files in {step}. Skipping.')
                 continue
 
+            meta_file = meta_files[0]
 
-            try:
-                print(f'Found {name}')
-                df = pd.read_csv(path)
+            m = re.search(r"step_(\d+)/proc_(\d+)\.meta\.txt$", meta_file)
+            istep, iproc = int(m.group(1)), int(m.group(2))
 
-                # Use filename (without extension) as label
-                label = f'{dirpath}_' + os.path.splitext(name)[0]
-                df[label_column] = label
+            with open(meta_file) as f:
+                metadf = pd.DataFrame([json.load(f)])
 
-                frames.append(df)
-            except pd.errors.EmptyDataError:
-                pass
+            metadf['report'] = path
+            metadf['step'] = istep
+            metadf['proc'] = 10 #iproc
+            meta.append(metadf)
 
+            for proc_file in proc_files:
 
-    if not frames:
-        df = pd.DataFrame()
-    else:
-        df = pd.concat(frames, ignore_index=True)
+                m = re.search(r"step_(\d+)/proc_(\d+)\.csv$", proc_file)
+                istep, iproc = int(m.group(1)), int(m.group(2))
 
-    if not meta:
-        metadf = pd.DataFrame()
-    else:
-        metadf = pd.concat(meta, ignore_index=True)
+                try:
+                    #print(f'Found {name}')
+                    df = pd.read_csv(proc_file)
 
-    df[['report']] = df['source'].str.extract(r'^(.+)/').astype(str)
-    df[['step', 'proc']] = df['source'].str.extract(
-        r'^.+/step_(\d+)_proc_(\d+)'
-    ).astype(int)
+                    # Use filename (without extension) as label
+                    df['report'] = path
+                    df['step'] = istep
+                    df['proc'] = iproc
+
+                    frames.append(df)
+                except pd.errors.EmptyDataError:
+                    pass
+
+    if not frames or not meta:
+        return None, None
+
+    df     = pd.concat(frames, ignore_index=True)
+    metadf = pd.concat(meta,   ignore_index=True)
 
     return df, metadf
 
@@ -466,7 +474,7 @@ def title_page(pdf, df, metadf):
 
     pass
 
-def definitions_page(pdf, df):
+def definitions_page(pdf):
     """
     Make a table containing the definition of terms used in the report.
 
@@ -474,8 +482,6 @@ def definitions_page(pdf, df):
     ----------
     pdf : 
         The open pdf file handle to save the title page figure into.
-    df : pandas.DataFrame
-        DataFrame containing job metrics.
 
     Returns
     -------
@@ -700,36 +706,92 @@ def heatmaps(pdf, df):
     pdf.savefig(fig)
     pl.close(fig)
 
-def report(metadf, df, fname):
+def one_report(pdf, metadf, df):
     """
-    Create the report.
+    Create a single report for the given metric data
 
     Parameters
     ----------
+    pdf : 
+        The pdf object to write to
     df : pandas.DataFrame
         DataFrame containing job metrics.
     metadf : pandas.DataFrame
         DataFrame containing job metadata.
-    fname : 
+
+    Returns
+    -------
+    None
+    """
+
+    rdf = reduced_df(df)
+
+    title_page(pdf, rdf, metadf)
+    plots(pdf, rdf)
+    heatmaps(pdf, df)
+    tables(pdf, rdf)
+
+def report(paths, pdfname):
+    """
+    Create a report for all job paths in paths.
+
+    Parameters
+    ----------
+    paths : list
+        List of paths to metric data
+    pdfname : 
         The filename to use for the PDF report.
 
     Returns
     -------
     None
     """
-    with PdfPages(fname) as pdf:
 
-        stepdf = df
+    df, metadf = load_metrics_and_meta(paths)
 
-        rdf = reduced_df(stepdf)
+    if df is None:
+        print("No metric data found. Stopping.")
+        sys.exit(0)
 
-        title_page(pdf, rdf, metadf)
-        plots(pdf, rdf)
-        heatmaps(pdf, df)
-        tables(pdf, rdf)
-        definitions_page(pdf, rdf)
+    with PdfPages(pdfname) as pdf:
 
-    print(f'Saved PDF report to {fname}')
+        for [group, gmdf] in metadf.groupby(['report', 'step']):
+            report,step = group
+            gdf = df[(df["report"] == report) & (df["step"] == step)]
+            gdf.reset_index(inplace=True, drop=True)
+
+            one_report(pdf, gmdf, gdf)
+
+        definitions_page(pdf)
+
+    print(f'Saved PDF report to {pdfname}')
+
+def verify_input_directories(paths):
+    """
+    Sanity check that the directories given by the user exist
+
+    Parameters
+    ----------
+    paths : list
+        List of paths to metric data
+
+    Returns
+    -------
+    Boolean
+    """
+
+    ok = True
+
+    for path in paths:
+        if not os.path.exists(path):
+            print(f'The directory {path} does not exist.')
+            ok = False
+
+        if not os.path.isdir(path):
+            print(f'The given location {path} is not a directory.')
+            ok = False
+
+    return ok
 
 def main(args):
     """
@@ -746,18 +808,10 @@ def main(args):
     """
     args = parse_args(args)
 
-    if not os.path.exists(args.input):
-        print(f'The directory {args.input} does not exist.')
-        sys.exit(1)
+    if not verify_input_directories(args.paths):
+        exit(1)
 
-    if not os.path.isdir(args.input):
-        print(f'The given location {args.input} is not a directory.')
-        sys.exit(1)
-
-
-    df, metadf = load_csv_tree(args.input)
-
-    report(metadf, df, args.output)
+    report(args.paths, args.output)
 
 
 def parse_args(args):
@@ -779,9 +833,10 @@ def parse_args(args):
 
     # Required argument for root directory
     parser.add_argument(
-        '-i', '--input',
-        required=True,
-        help='Root directory to search for CSV files'
+        'paths',
+        metavar='directory',
+        nargs='*',
+        help='Top level directories created by gssr-record'
     )
 
     # Optional argument for output PDF
@@ -792,6 +847,11 @@ def parse_args(args):
     )
 
     args = parser.parse_args(args)
+
+    if len(args.paths) == 0:
+        parser.print_help()
+        sys.exit(1)
+
     return args
 
 

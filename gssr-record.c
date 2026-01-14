@@ -392,7 +392,7 @@ void write_meta(FILE *fp, cmdargs_t *args, jobenv_t *jobenv)
 
     fprintf(fp,
         "{\n"
-        "    \"%s-version\": \"%s\""       ",\n"
+        "    "PROGNAME"-version: \""VERSION"\""      ",\n"
         "    \"date\": \"%s\""       ",\n"
         "    \"cluster\": \"%s\""    ",\n"
         "    \"jobid\": \"%s\""      ",\n"
@@ -402,8 +402,6 @@ void write_meta(FILE *fp, cmdargs_t *args, jobenv_t *jobenv)
         "    \"ntasks\": %i"     ",\n"
         "    \"ngpus\": %i"       ",\n"
         "    \"executable\": \"%s\"" ",\n",
-        PROGNAME,
-        VERSION,
         date,
         jobenv->slurm_cluster,
         jobenv->slurm_jobid,
