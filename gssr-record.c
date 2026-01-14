@@ -81,10 +81,10 @@ static volatile pid_t child_pid = -1;
 // ==========================================================================
 void handle_signal(int sig)
 {
-    fprintf(stderr, PROGNAME" got signal %i\n", sig);
+    //fprintf(stderr, PROGNAME" got signal %i\n", sig);
 
     if (child_pid > 0) {
-        fprintf(stderr, PROGNAME" forwarded signal %i to %i\n", sig, child_pid);
+        //fprintf(stderr, PROGNAME" forwarded signal %i to %i\n", sig, child_pid);
         kill(child_pid, sig);   // forward to child
     }
 
@@ -280,7 +280,7 @@ void record_metrics(dcgmHandle_t handle,
             req.fieldId  = fieldIds[field_idx];
 
             if (dcgmGetFieldSummary(handle, &req) != DCGM_ST_OK) {
-                fprintf(stderr, PROGNAME": Error getting %s\n", fieldNames[field_idx]);
+                //fprintf(stderr, PROGNAME": Error getting %s\n", fieldNames[field_idx]);
                 goto skip_record;
             }
 
@@ -822,7 +822,12 @@ int main(int argc, char **argv)
 
     if (jobenv.rank0)
     {
-        write_meta(metafp, &args, &jobenv);
+        if (metafp)
+        {
+            write_meta(metafp, &args, &jobenv);
+            fflush(metafp);
+            fclose(metafp);
+        }
     }
 
     int    write_header=1;
@@ -877,12 +882,6 @@ shutdown:
     {
         fflush(fp);
         fclose(fp);
-    }
-
-    if (metafp)
-    {
-        fflush(metafp);
-        fclose(metafp);
     }
 
     // Reset signal handlers to default
