@@ -1,9 +1,7 @@
 /**
- * Simplified Jobreport tool to collect DCGM metrics
- * for the GPU Saturation Scorer.
+ * Collect DCGM metrics for the GPU Saturation Scorer.
  *
  * TODO: 
- *  o Label messages as coming from jobreport
  *  o Should we quit early if the output path already exists?
  *
  * Written by Jonathan Coles <jonathan.coles@cscs.ch>
