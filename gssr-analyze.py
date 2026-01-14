@@ -29,6 +29,8 @@ import pandas as pd
 from matplotlib import cm
 import matplotlib.pyplot as pl
 from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.ticker import MaxNLocator
+
 
 # Random Number Generator used to add a little noise to the histrogram
 # to increase legibility when bars overlap.
@@ -190,28 +192,27 @@ def plot_txrx_metrics(ax, df):
 
     x = df['timestamp']
 
+    data_range = [np.inf, -np.inf]
     for metric,scale,c,_ in cfg:
         y_avg = df[metric,'mean'] * scale
-        min_y = df[metric,'min'] * scale
-        max_y = df[metric,'max'] * scale
     
-        # Downsample data to a maximum of 100 points
-        #x, y_avg, min_y, max_y = self.downsample((x, y_avg, min_y, max_y))
-        
-        # Add the shaded area between min_y and max_y
-        #ax1.fill_between(x, min_y, max_y, color='lightblue', alpha=0.5, label='Range')
-        
         # Plot the actual y line over the shaded area
-        ax[0].plot(x, y_avg, label=metric, color=c, linewidth=1.0)
-        ax[0].set_xlabel('Time (s)')
-        ax[0].set_ylabel(f'Data Movement (MB/s)', labelpad=10)
+        ax[0].plot(x, y_avg, color=c, linewidth=1.0)
+        data_range = [min(data_range[0], np.amin(y_avg)), max(data_range[1], np.amax(y_avg))]
+
+    for metric,scale,c,_ in cfg:
+        y_avg = df[metric,'mean'] * scale
 
         n_bins = 20 
-        y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=(0,100))
-        yeps = rng.integers(low=0, high=2, size=len(y))
-        yeps[y <= 0] = 0
-        xeps = rng.integers(low=0, high=2, size=len(y))
-        ax[1].plot(y + yeps, bins[0:-1] + xeps, alpha=0.8, color=c, lw=1.0, drawstyle='steps')
+        y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=data_range)
+        #yeps = rng.integers(low=0, high=2, size=len(y))
+        #yeps[y <= 0] = 0
+        #xeps = rng.integers(low=0, high=2, size=len(y))
+        #ax[1].plot(y + yeps, bins[0:-1] + xeps, alpha=0.8, color=c, lw=1.0, drawstyle='steps')
+        ax[1].plot(y, bins[0:-1], alpha=0.8, color=c, lw=1.0, drawstyle='steps')
+
+    ax[0].set_xlabel('Time (s)')
+    ax[0].set_ylabel(f'Data Movement (MB/s)', labelpad=10)
 
     ax[1].set_title('Histogram', fontsize=6)
     ax[1].set_xlabel('% of Runtime')
@@ -376,9 +377,10 @@ def title_page_table(ax, metadf):
 
     table_data = [
         [ 'Slurm Job ID',   m.get('jobid',      'missing')  ],
+        [ 'Job Name',       m.get('jobname',    'missing')  ],
+        [ 'Jobstep',        m.get('step',       'missing')  ],
         [ 'Cluster',        m.get('cluster',    'missing')  ],
         [ 'Date',           m.get('date',       'missing')  ],
-        [ 'Job Name',       m.get('jobname',    'missing')  ],
         [ 'Node Count',     m.get('nnodes',     'missing')  ],
         [ 'Task Count',     m.get('ntasks',     'missing')  ],
         [ 'GPU Count',      m.get('ngpus',      'missing')  ],
@@ -554,7 +556,6 @@ def definitions_page(pdf):
 
     pdf.savefig(fig)
     pl.close(fig)
-    pass
 
 def plots(pdf, df):
     """
@@ -702,9 +703,130 @@ def heatmaps(pdf, df):
         ax1.set_xlabel('Time (s)')
         ax1.set_ylabel(f'GPU Index', labelpad=10)
         ax1.set_title(f'{label} activity (%)')
+        ax1.yaxis.set_major_locator(MaxNLocator(integer=True))
+
 
     pdf.savefig(fig)
     pl.close(fig)
+
+
+def evaluation(pdf, df, metadf):
+    """
+    Evaluate the metrics to give an analysis and recommendations about the job.
+
+    Parameters
+    ----------
+    pdf : 
+        The open pdf file handle to save the title page figure into.
+    df : pandas.DataFrame
+        DataFrame containing job metrics.
+    metadf : pandas.DataFrame
+        DataFrame containing job metadata.
+
+    Returns
+    -------
+    None
+    """
+
+    fig, axes = pl.subplots(nrows=1, ncols=1, figsize=(8, 11), squeeze=False)
+    ax = axes[0,0]
+
+    ax.axis('off')  # hide axes
+
+    fig.text(
+        0.1, 0.95,
+        'Evaluation (Experimental)',
+        ha='left',
+        va='top',
+        fontsize=16,
+        fontweight='bold'
+    )
+
+    col0_width = 25
+    col1_width = 45
+
+    colors = dict(
+            good = 'g',
+            acceptable = 'b',
+            improve = 'orange',
+            poor = 'r'
+            )
+
+    cfg = [
+        [df['DCGM_FI_DEV_GPU_UTIL_avg'].mean(), '%.2f',
+            [[ 25, 'poor',        'The global average GPU utilization is poor and below acceptable use of node resources.'],
+             [ 50, 'improve',     'The global average GPU utilization is below acceptable limits.'],
+             [ 75, 'acceptable',  'The global average GPU utilization could be improved by is an acceptable use of node resources.'],
+             [100, 'good',        'The global average GPU utilization is a good use of node resources.'],
+            ]
+        ],
+
+        [df[['DCGM_FI_PROF_PIPE_TENSOR_ACTIVE_avg',
+            'DCGM_FI_PROF_PIPE_FP64_ACTIVE_avg',
+            'DCGM_FI_PROF_PIPE_FP32_ACTIVE_avg',
+            'DCGM_FI_PROF_PIPE_FP16_ACTIVE_avg']].sum(axis=1).mean(), '%.2f',
+            [[1/16., 'poor',        'The global average FP utilization is poor and below acceptable use of node resources.'],
+             [1/8. , 'improve',     'The global average FP utilization is below acceptable limits.'],
+             [1/4. , 'acceptable',  'The global average FP utilization could be improved by is an acceptable use of node resources.'],
+             [4    , 'good',        'The global average FP utilization is a good use of node resources.'],
+            ] 
+        ]
+    ]
+
+    table_colors = []
+    table_data = []
+    for c in cfg:
+        val, fmt, limits = c
+        for [lim, rating, msg] in limits:
+            if val <= lim:
+                table_data.append(['', fmt % val, msg])
+                table_colors.append(colors[rating])
+                break
+
+    row_line_counts = []  # to store number of lines per row
+    for row in table_data:
+        _, label, msg = row
+        col0 = textwrap.wrap(str(label), width=col0_width, max_lines=20)
+        col1 = textwrap.wrap(str(msg),   width=col1_width, max_lines=20)
+
+        row[1] = '\n'.join(col0)
+        row[2] = '\n'.join(col1)
+
+        row_line_counts.append(max(len(col0),len(col1)))
+
+    # Create table
+    h = 0
+    for i, lines in enumerate(row_line_counts):  # header row = 1 line
+        h += 0.05 * lines
+
+    table = ax.table(
+        cellText=table_data,
+        cellLoc='left',
+        loc='top',
+        bbox = (0,1-h,1,h),
+        colWidths = [0.1, 0.4, 0.7]
+    )
+
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+
+    for i, lines in enumerate(row_line_counts):  # header row = 1 line
+        table[i, 0].set_height(0.01 * lines)
+        table[i, 1].set_height(0.01 * lines)
+        table[i, 2].set_height(0.01 * lines)
+
+    # --- Apply alternating row colors ---
+    colors = ['#ffffff', '#dddddd']  # white and light grey
+    for i in range(0, len(row_line_counts)): 
+        color = table_colors[i]  # alternate colors
+        table[i, 0].set_facecolor(color)
+        color = colors[(i+1) % 2]  # alternate colors
+        table[i, 1].set_facecolor(color)
+        table[i, 2].set_facecolor(color)
+
+    pdf.savefig(fig)
+    pl.close(fig)
+
 
 def one_report(pdf, metadf, df):
     """
@@ -727,6 +849,7 @@ def one_report(pdf, metadf, df):
     rdf = reduced_df(df)
 
     title_page(pdf, rdf, metadf)
+    evaluation(pdf, df, metadf)
     plots(pdf, rdf)
     heatmaps(pdf, df)
     tables(pdf, rdf)
@@ -786,8 +909,7 @@ def verify_input_directories(paths):
         if not os.path.exists(path):
             print(f'The directory {path} does not exist.')
             ok = False
-
-        if not os.path.isdir(path):
+        elif not os.path.isdir(path):
             print(f'The given location {path} is not a directory.')
             ok = False
 
