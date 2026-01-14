@@ -384,11 +384,11 @@ skip_record:
 // ==========================================================================
 void write_meta(FILE *fp, cmdargs_t *args, jobenv_t *jobenv)
 {
-    char buf[32];  // "YYYY-MM-DDTHH:MM:SS..." + '\0'
+    char date[32];  // "YYYY-MM-DDTHH:MM:SS..." + '\0'
 
     time_t now = time(NULL);
     struct tm *tm_now = localtime(&now);
-    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S%z", tm_now);
+    strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S%z", tm_now);
 
     fprintf(fp,
         "{\n"
@@ -402,9 +402,9 @@ void write_meta(FILE *fp, cmdargs_t *args, jobenv_t *jobenv)
         "    \"ntasks\": %i"     ",\n"
         "    \"ngpus\": %i"       ",\n"
         "    \"executable\": \"%s\"" ",\n",
-        buf,
         PROGNAME,
         VERSION,
+        date,
         jobenv->slurm_cluster,
         jobenv->slurm_jobid,
         jobenv->slurm_jobname,
