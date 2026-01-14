@@ -16,5 +16,5 @@ make
 A simple example to test the setup is to record a few seconds of no activity.
 ```bash
 ./gssr-record -o gr-sleep-test sleep 30
-./gssr-analyze.py -i gr-sleep-test -o gr-sleep-test-report.pdf
+./gssr-analyze.py gr-sleep-test -o gr-sleep-test-report.pdf
 ```
