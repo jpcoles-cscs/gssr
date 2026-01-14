@@ -329,7 +329,7 @@ void write_meta(FILE *fp, cmdargs_t *args, jobenv_t *jobenv)
 
     fprintf(fp,
         "{\n"
-        "    "PROGNAME"-version: \""VERSION"\""      ",\n"
+        "    \""PROGNAME"-version\": \""VERSION"\""      ",\n"
         "    \"date\": \"%s\""       ",\n"
         "    \"cluster\": \"%s\""    ",\n"
         "    \"jobid\": \"%s\""      ",\n"
