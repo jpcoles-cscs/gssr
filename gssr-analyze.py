@@ -83,6 +83,7 @@ def load_metrics_and_meta(paths):
             metadf['proc'] = 10 #iproc
             meta.append(metadf)
 
+            ngpus = 0
             for proc_file in proc_files:
 
                 m = re.search(r"step_(\d+)/proc_(\d+)\.csv$", proc_file)
@@ -97,9 +98,14 @@ def load_metrics_and_meta(paths):
                     df['step'] = istep
                     df['proc'] = iproc
 
+                    # Count the number of unique GPUs this step monitored
+                    ngpus += df.groupby(["step", "proc"])["gpuId"].nunique()
+
                     frames.append(df)
                 except pd.errors.EmptyDataError:
                     pass
+
+            metadf['unique gpus'] = ngpus.to_numpy()
 
     if not frames or not meta:
         return None, None
@@ -277,7 +283,7 @@ def plot_active_metrics(ax, df):
 
     ax[0].set_xlabel('Time (s)')
     ax[0].set_ylabel(f'GPU activity (%)', labelpad=10)
-    ax[0].set_ylim(ymin=0, ymax=105)
+    ax[0].set_ylim(ymin=-5, ymax=105)
 
     ax[1].set_title('Histogram', fontsize=6)
     ax[1].set_xlabel('% of Runtime')
@@ -342,7 +348,7 @@ def plot_sm_metrics(ax, df):
 
     ax[0].set_xlabel('Time (s)')
     ax[0].set_ylabel(f'SM Usage (%)', labelpad=10)
-    ax[0].set_ylim(ymin=0, ymax=105)
+    ax[0].set_ylim(ymin=-5, ymax=105)
     
     ax[1].set_title('Histogram', fontsize=6)
     ax[1].set_xlabel('% of Runtime')
@@ -376,16 +382,16 @@ def title_page_table(ax, metadf):
     m = metadf.iloc[0].to_dict()
 
     table_data = [
-        [ 'Slurm Job ID',   m.get('jobid',      'missing')  ],
-        [ 'Job Name',       m.get('jobname',    'missing')  ],
-        [ 'Jobstep',        m.get('step',       'missing')  ],
-        [ 'Cluster',        m.get('cluster',    'missing')  ],
-        [ 'Date',           m.get('date',       'missing')  ],
-        [ 'Node Count',     m.get('nnodes',     'missing')  ],
-        [ 'Task Count',     m.get('ntasks',     'missing')  ],
-        [ 'GPU Count',      m.get('ngpus',      'missing')  ],
-        [ 'Executable',     m.get('executable', 'missing')  ],
-        [ 'Arguments',      m.get('arguments',  'missing')  ],
+        [ 'Slurm Job ID',   m.get('jobid',        'missing')  ],
+        [ 'Job Name',       m.get('jobname',      'missing')  ],
+        [ 'Jobstep',        m.get('step',         'missing')  ],
+        [ 'Cluster',        m.get('cluster',      'missing')  ],
+        [ 'Date',           m.get('date',         'missing')  ],
+        [ 'Node Count',     m.get('nnodes',       'missing')  ],
+        [ 'Task Count',     m.get('ntasks',       'missing')  ],
+        [ 'GPU Count',      m.get('unique gpus',  'missing')  ],
+        [ 'Executable',     m.get('executable',   'missing')  ],
+        [ 'Arguments',      m.get('arguments',    'missing')  ],
     ]
 
     row_line_counts = []  # to store number of lines per row
@@ -845,6 +851,8 @@ def one_report(pdf, metadf, df):
     -------
     None
     """
+
+    print(df)
 
     rdf = reduced_df(df)
 
