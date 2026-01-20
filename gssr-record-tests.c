@@ -6,6 +6,20 @@ void test_job_environment()
 {
     jobenv_t je;
 
+    job_environment(&je);
+    assert(je.with_slurm == 0);
+    assert(!strcmp(je.slurm_step, "0"));
+    assert(!strcmp(je.slurm_rank, "0"));
+    assert(!strcmp(je.slurm_localid, "0"));
+    assert(!strcmp(je.slurm_jobid, "0"));
+    assert(!strcmp(je.slurm_jobname, "nojobname"));
+    assert(!strcmp(je.slurm_cluster, "nocluster"));
+    assert(!strcmp(je.slurm_ntasks, "1"));
+    assert(!strcmp(je.slurm_nnodes, "1"));
+    assert(!strcmp(je.slurm_ngpus, "0"));
+    assert(!strcmp(je.slurm_step_nnodes, "1"));
+    assert(!strcmp(je.slurm_step_ntasks, "1"));
+
     setenv("SLURM_STEP_ID", "123", 1);
     job_environment(&je);
     assert(!strcmp(je.slurm_step, "0"));

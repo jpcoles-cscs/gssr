@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export SLURM_PARTITION=debug
+
 make clean
 make
 make install-uv
@@ -140,10 +142,10 @@ function test_08_concurrent_srun()
 #SBATCH --exclusive --mem=450G
 
 
-srun -N1 --ntasks-per-node=1 --exclusive --gpus-per-task=1 --cpus-per-gpu=5 --mem=50G  $GR -o test-report-08 /usr/bin/dcgmproftester12 --max-processes 1 -t 1006 -d 10 &
-srun -N1 --ntasks-per-node=1 --exclusive --gpus-per-task=1 --cpus-per-gpu=5 --mem=50G  $GR -o test-report-08 /usr/bin/dcgmproftester12 --max-processes 1 -t 1007 -d 10 &
-srun -N1 --ntasks-per-node=1 --exclusive --gpus-per-task=1 --cpus-per-gpu=5 --mem=50G  $GR -o test-report-08 /usr/bin/dcgmproftester12 --max-processes 1 -t 1008 -d 10 &
-srun -N1 --ntasks-per-node=1 --exclusive --gpus-per-task=1 --cpus-per-gpu=5 --mem=50G  $GR -o test-report-08 /usr/bin/dcgmproftester12 --max-processes 1 -t 1005 -d 10 &
+srun -N1 --ntasks-per-node=1 --exclusive --gpus-per-task=1 --cpus-per-gpu=5 --mem=50G  $GR -o test-report-08 /usr/bin/dcgmproftester12 --max-processes 1 -t 1006 -d 20 &
+srun -N1 --ntasks-per-node=1 --exclusive --gpus-per-task=1 --cpus-per-gpu=5 --mem=50G  $GR -o test-report-08 /usr/bin/dcgmproftester12 --max-processes 1 -t 1007 -d 20 &
+srun -N1 --ntasks-per-node=1 --exclusive --gpus-per-task=1 --cpus-per-gpu=5 --mem=50G  $GR -o test-report-08 /usr/bin/dcgmproftester12 --max-processes 1 -t 1008 -d 20 &
+srun -N1 --ntasks-per-node=1 --exclusive --gpus-per-task=1 --cpus-per-gpu=5 --mem=50G  $GR -o test-report-08 /usr/bin/dcgmproftester12 --max-processes 1 -t 1005 -d 20 &
 
 wait
 EOF
@@ -154,7 +156,7 @@ EOF
 
 # test_gr_basic
 # test_ga_basic
-test_00_sleep
+# test_00_sleep
 # test_01_dcgmproftester
 # test_02_dcgmproftester
 # test_03_signal
@@ -163,4 +165,4 @@ test_00_sleep
 # test_06_mps_wrapper
 # test_07_multi_mps_wrapper
 # test_container
-# test_08_concurrent_srun
+test_08_concurrent_srun

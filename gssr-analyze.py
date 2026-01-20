@@ -300,6 +300,92 @@ def plot_active_metrics(ax, df):
     l,h = list(zip(*legend))
     ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
 
+def plot_energy_metrics(ax, df):
+    """
+    Plot the GPU energy and power usage.
+
+    Parameters
+    ----------
+    ax : np.array
+        1x2 array of Axes objects
+    df : pandas.DataFrame
+        DataFrame containing all metrics
+
+    Returns
+    -------
+    None
+    """
+
+    cfg = [
+        ['DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION_avg',    1e-3 * 0.000277778, 'k',   'Total Energy'],
+        ['DCGM_FI_DEV_POWER_USAGE_avg',                 1, 'red', 'Power']
+        ]
+
+    x = df['timestamp']
+
+
+
+    metric,scale,c,_ = cfg[0]
+    y_avg = df[metric,'cumsum'] * scale
+
+    ax0t = ax[0].twinx()
+    ax1t = ax[1].twinx()
+
+    pos = ax[0].get_position()  # Bbox: Bbox(x0, y0, x1, y1)
+    ax[0].set_position([pos.x0, pos.y0, pos.width * 0.95, pos.height])
+    pos = ax0t.get_position()  # Bbox: Bbox(x0, y0, x1, y1)
+    ax0t.set_position([pos.x0, pos.y0, pos.width * 0.95, pos.height])
+
+    # Plot the actual y line over the shaded area
+    ax[0].plot(x, y_avg, label=metric, color=c, linewidth=1.0)
+    data_range = [np.amin(y_avg), np.amax(y_avg)]
+
+    # Create the distribution plot (right)
+    n_bins = 20 #min(100, max(10, int(np.ceil(np.sqrt(len(y_avg))))))
+    y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=data_range)
+
+    yeps = rng.integers(low=0, high=2, size=len(y))
+    yeps[y <= 0] = 0
+    xeps = rng.integers(low=0, high=2, size=len(y))
+    ax[1].plot(y + yeps, bins[0:-1] + xeps, alpha=0.8, color=c, lw=1.0, drawstyle='steps')
+
+    metric,scale,c,_ = cfg[1]
+    y_avg = df[metric,'mean'] * scale
+
+    ax0t.plot(x, y_avg, label=metric, color=c, linewidth=1.0)
+    data_range = [np.amin(y_avg), np.amax(y_avg)]
+
+
+    # Create the distribution plot (right)
+    n_bins = 20 #min(100, max(10, int(np.ceil(np.sqrt(len(y_avg))))))
+    y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=data_range)
+
+    yeps = rng.integers(low=0, high=2, size=len(y))
+    yeps[y <= 0] = 0
+    xeps = rng.integers(low=0, high=2, size=len(y))
+    ax1t.plot(y + yeps, bins[0:-1] + xeps, alpha=0.8, color=c, lw=1.0, drawstyle='steps')
+    ax1t.tick_params(labelright=False)
+
+    ax[0].set_xlabel('Time (s)')
+    ax[0].set_ylabel(f'GPU Energy Usage (Wh)', labelpad=10)
+    ax[0].set_ylim(ymin=-5) #, ymax=105)
+
+    ax0t.set_ylabel(f'GPU Power (W)', labelpad=10)
+
+    ax[1].set_title('Histogram', fontsize=6)
+    ax[1].set_xlabel('% of Runtime')
+    ax[1].set_xticks([0,25,50,75,100])
+    ax[1].set_xlim(-5, 105)
+    ax[1].set_ylim(ax[0].get_ylim())
+
+    ax1t.set_ylim(ax0t.get_ylim())
+    
+
+    legend = [ [legend_text,   pl.Line2D([0], [0], lw=5, color=c)] for _,_,c,legend_text in cfg ]
+    l,h = list(zip(*legend))
+    ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
+
+
 def plot_sm_metrics(ax, df):
     """
     Plot the GPU SM active and occupancy metrics.
@@ -592,7 +678,7 @@ def plots(pdf, df):
         'ytick.labelsize': 6,
     })
 
-    nr, nc = 4,2
+    nr, nc = 5,2
     fig, axes = pl.subplots(nrows=nr, ncols=nc, figsize=(8, 11),
                             squeeze=False, sharey='row', 
                             gridspec_kw=dict(wspace=0.1, hspace=.4, width_ratios=[6,2]))
@@ -619,6 +705,7 @@ def plots(pdf, df):
     plot_sm_metrics(axes[2,:], df)
     plot_memory_metrics(axes[0,:], df)
     plot_txrx_metrics(axes[3,:], df)
+    plot_energy_metrics(axes[4,:], df)
 
     pdf.savefig(fig)
     pl.close(fig)
@@ -633,8 +720,9 @@ def reduced_df(df):
 
     cols_to_aggregate = [col for col in df.columns if col.endswith('_avg')]
 
-    agg_df = df.groupby('timestamp')[cols_to_aggregate].agg(['min', 'max', 'mean'])
+    agg_df = df.groupby('timestamp')[cols_to_aggregate].agg(['min', 'max', 'mean', 'sum'])
     agg_df.reset_index(inplace=True)
+    agg_df['DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION_avg', 'cumsum'] = agg_df['DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION_avg', 'sum'].cumsum()
 
     return agg_df
 

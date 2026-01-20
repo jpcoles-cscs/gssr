@@ -47,7 +47,9 @@ unsigned short fieldIds[] = {
     DCGM_FI_PROF_PCIE_TX_BYTES,
     DCGM_FI_PROF_PCIE_RX_BYTES,
     DCGM_FI_PROF_NVLINK_RX_BYTES,
-    DCGM_FI_PROF_NVLINK_TX_BYTES
+    DCGM_FI_PROF_NVLINK_TX_BYTES,
+    DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION,
+    DCGM_FI_DEV_POWER_USAGE
 };
 static int numFields = sizeof(fieldIds) / sizeof(fieldIds[0]);
 
@@ -66,10 +68,12 @@ char *fieldNames[] = {
     "DCGM_FI_PROF_PCIE_TX_BYTES",
     "DCGM_FI_PROF_PCIE_RX_BYTES",
     "DCGM_FI_PROF_NVLINK_RX_BYTES",
-    "DCGM_FI_PROF_NVLINK_TX_BYTES"
+    "DCGM_FI_PROF_NVLINK_TX_BYTES",
+    "DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION",
+    "DCGM_FI_DEV_POWER_USAGE"
 };
 
-#define SAMPLE_INTERVAL         1000000
+#define SAMPLE_INTERVAL         2000000
 #define SUBSAMPLE_INTERVAL      (SAMPLE_INTERVAL / 10)
 #define RETENTION_INTERVAL      (SAMPLE_INTERVAL + 10)
 
@@ -158,6 +162,8 @@ void job_environment(jobenv_t *je)
         je->slurm_ntasks   = "1";
         je->slurm_nnodes   = "1";
         je->slurm_ngpus    = "0";
+        je->slurm_step_nnodes = "1";
+        je->slurm_step_ntasks = "1";
     }
 
     je->nnodes = je->slurm_nnodes ? atoi(je->slurm_nnodes) : 0;
@@ -267,10 +273,6 @@ void record_metrics(dcgmHandle_t handle,
 
     req.version = dcgmFieldSummaryRequest_version1;
     req.entityGroupId = DCGM_FE_GPU;
-    req.summaryTypeMask =
-        DCGM_SUMMARY_MIN |
-        DCGM_SUMMARY_MAX |
-        DCGM_SUMMARY_AVG;
 
     /* Requests need to be in usec */
     req.startTime = then * 1000000;
@@ -286,6 +288,18 @@ void record_metrics(dcgmHandle_t handle,
         {
             req.entityId = devices[gpu_idx];
             req.fieldId  = fieldIds[field_idx];
+            req.summaryTypeMask =
+                DCGM_SUMMARY_MIN |
+                DCGM_SUMMARY_MAX |
+                DCGM_SUMMARY_AVG;
+
+            if (fieldIds[field_idx] == DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION)
+            {
+                req.summaryTypeMask =
+                    DCGM_SUMMARY_MIN |
+                    DCGM_SUMMARY_MAX |
+                    DCGM_SUMMARY_DIFF;
+            }
 
             if (dcgmGetFieldSummary(handle, &req) != DCGM_ST_OK) {
                 //fprintf(stderr, PROGNAME": Error getting %s\n", fieldNames[field_idx]);
@@ -299,6 +313,7 @@ void record_metrics(dcgmHandle_t handle,
 
             records[*record_count].values[field_idx].fieldId = fieldIds[field_idx];
             records[*record_count].values[field_idx].fieldType = req.response.fieldType;
+
             if (req.response.fieldType == DCGM_FT_INT64)
             {
                 records[*record_count].values[field_idx].min = req.response.values[0].i64 > 2000000000 ? 0 : req.response.values[0].i64;
@@ -311,6 +326,7 @@ void record_metrics(dcgmHandle_t handle,
                 records[*record_count].values[field_idx].max = req.response.values[1].fp64 > 2e9 ? 0 : req.response.values[1].fp64;
                 records[*record_count].values[field_idx].avg = req.response.values[2].fp64 > 2e9 ? 0 : req.response.values[2].fp64;
             }
+fprintf(stderr, PROGNAME": getting %s %i %i %f\n", fieldNames[field_idx], fieldIds[field_idx], req.response.fieldType, records[*record_count].values[field_idx].avg);
         }
 
         (*record_count)++;
@@ -390,8 +406,8 @@ void write_records(FILE *fp, int n, record_t *records, int with_header)
         for (int field_idx=0; field_idx < numFields; field_idx++)
         {
             fprintf(fp, ",%s_min", fieldNames[field_idx]);
-            fprintf(fp, ",%s_max", fieldNames[field_idx]);
             fprintf(fp, ",%s_avg", fieldNames[field_idx]);
+            fprintf(fp, ",%s_max", fieldNames[field_idx]);
         }
         fprintf(fp, "\n");
     }
