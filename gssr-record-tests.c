@@ -69,6 +69,8 @@ void test_job_environment()
     setenv("SLURM_LOCALID",  "0", 1);
     setenv("SLURM_NTASKS",   "5", 1);
     setenv("SLURM_JOB_NUM_NODES",   "8", 1);
+    setenv("SLURM_STEP_NUM_NODES",  "4", 1);
+    setenv("SLURM_STEP_NUM_TASKS",  "2", 1);
     job_environment(&je);
     assert(!strcmp(je.slurm_cluster, "test-cluster"));
     assert(!strcmp(je.slurm_step, "123"));
@@ -77,11 +79,11 @@ void test_job_environment()
     assert(!strcmp(je.slurm_jobid, "000"));
     assert(!strcmp(je.slurm_jobname, "test"));
     assert(!strcmp(je.slurm_ntasks, "5"));
-    assert(je.ntasks == 5);
     assert(!strcmp(je.slurm_nnodes, "8"));
-    assert(je.nnodes == 8);
     assert(je.rank0);
     assert(je.local0);
+    assert(!strcmp(je.slurm_step_ntasks, "2"));
+    assert(!strcmp(je.slurm_step_nnodes, "4"));
 }
 
 #define ASSERT_CLEAN(cond, label) \
@@ -308,9 +310,8 @@ void test_write_meta()
             .slurm_nnodes = "4",
             .slurm_ntasks = "128",
             .slurm_ngpus = "4",
-            .nnodes = 4,
-            .ntasks = 128,
-            .ngpus = 4,
+            .slurm_step_nnodes = "2",
+            .slurm_step_ntasks = "64",
             .with_slurm = 1,
         };
         cmdargs_t args = (cmdargs_t){

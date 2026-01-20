@@ -128,7 +128,6 @@ void install_signal_handler()
 void job_environment(jobenv_t *je)
 {
     /* Slurm identity */
-    je->slurm_step    = getenv("SLURM_STEP_ID");
     je->slurm_rank    = getenv("SLURM_PROCID");
     je->slurm_localid = getenv("SLURM_LOCALID");
     je->slurm_jobname = getenv("SLURM_JOB_NAME");
@@ -137,6 +136,10 @@ void job_environment(jobenv_t *je)
     je->slurm_nnodes  = getenv("SLURM_JOB_NUM_NODES");
     je->slurm_ntasks  = getenv("SLURM_NTASKS");
     je->slurm_ngpus   = getenv("SLURM_GPUS_ON_NODE");
+
+    je->slurm_step        = getenv("SLURM_STEP_ID");
+    je->slurm_step_nnodes = getenv("SLURM_STEP_NUM_NODES");
+    je->slurm_step_ntasks = getenv("SLURM_STEP_NUM_TASKS");
 
     je->with_slurm = je->slurm_jobname != NULL;
 
@@ -334,19 +337,21 @@ void write_meta(FILE *fp, cmdargs_t *args, jobenv_t *jobenv)
         "    \"cluster\": \"%s\""    ",\n"
         "    \"jobid\": \"%s\""      ",\n"
         "    \"jobname\": \"%s\""    ",\n"
-        "    \"nnodes\": %i"     ",\n"
-        "    \"ngpus\": %i"      ",\n"
-        "    \"ntasks\": %i"     ",\n"
-        "    \"ngpus\": %i"       ",\n"
+        "    \"nnodes\": \"%s\""     ",\n"
+        "    \"ntasks\": \"%s\""     ",\n"
+        "    \"ngpus\": \"%s\""       ",\n"
+        "    \"step_nnodes\": \"%s\""     ",\n"
+        "    \"step_ntasks\": \"%s\""     ",\n"
         "    \"executable\": \"%s\"" ",\n",
         date,
         jobenv->slurm_cluster,
         jobenv->slurm_jobid,
         jobenv->slurm_jobname,
-        jobenv->nnodes,
-        jobenv->ngpus,
-        jobenv->ntasks,
-        jobenv->ngpus * jobenv->ntasks,
+        jobenv->slurm_nnodes,
+        jobenv->slurm_ntasks,
+        jobenv->slurm_ngpus,
+        jobenv->slurm_step_nnodes,
+        jobenv->slurm_step_ntasks,
         args->child_argv[0]
     );
 
@@ -786,11 +791,17 @@ int main(int argc, char **argv)
     CHECK_DCGM(dcgmInit());
     CHECK_DCGM(dcgmConnect("127.0.0.1", &handle));
 
+    char gpu_group_name[10+1+7+1];
+    char field_group_name[7+1+7+1];
+
+    snprintf(  gpu_group_name, sizeof(  gpu_group_name), "slurm_gpus_%ld", getpid());
+    snprintf(field_group_name, sizeof(field_group_name), "metrics_%ld", getpid());
+
     /* Create GPU group */
     dcgmGpuGrp_t gpuGroup;
     CHECK_DCGM(dcgmGroupCreate(handle,
                                DCGM_GROUP_EMPTY,
-                               "slurm_gpus",
+                               gpu_group_name,
                                &gpuGroup));
 
     /* Field group */
@@ -798,7 +809,7 @@ int main(int argc, char **argv)
     CHECK_DCGM(dcgmFieldGroupCreate(handle,
                                     numFields,
                                     fieldIds,
-                                    "metrics",
+                                    field_group_name,
                                     &fieldGroup));
 
     unsigned int devices[MAX_GPUS];
