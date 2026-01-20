@@ -75,8 +75,12 @@ def load_metrics_and_meta(paths):
             m = re.search(r"step_(\d+)/proc_(\d+)\.meta\.txt$", meta_file)
             istep, iproc = int(m.group(1)), int(m.group(2))
 
-            with open(meta_file) as f:
-                metadf = pd.DataFrame([json.load(f)])
+            try:
+                with open(meta_file) as f:
+                    metadf = pd.DataFrame([json.load(f)])
+            except json.decoder.JSONDecodeError as e:
+                print(f'Error reading {meta_file}. Skipping. {e}')
+                continue
 
             metadf['report'] = path
             metadf['step'] = istep
@@ -387,8 +391,8 @@ def title_page_table(ax, metadf):
         [ 'Jobstep',        m.get('step',         'missing')  ],
         [ 'Cluster',        m.get('cluster',      'missing')  ],
         [ 'Date',           m.get('date',         'missing')  ],
-        [ 'Node Count',     m.get('nnodes',       'missing')  ],
-        [ 'Task Count',     m.get('ntasks',       'missing')  ],
+        [ 'Node Count',     '%s (of %s)' % (m.get('step_nnodes',  'missing'), m.get('nnodes',  'unknown'))  ],
+        [ 'Task Count',     '%s (of %s)' % (m.get('step_ntasks',  'missing'), m.get('ntasks',  'unknown'))  ],
         [ 'GPU Count',      m.get('unique gpus',  'missing')  ],
         [ 'Executable',     m.get('executable',   'missing')  ],
         [ 'Arguments',      m.get('arguments',    'missing')  ],
@@ -851,8 +855,6 @@ def one_report(pdf, metadf, df):
     -------
     None
     """
-
-    print(df)
 
     rdf = reduced_df(df)
 
