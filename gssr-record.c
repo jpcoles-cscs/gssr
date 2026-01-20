@@ -69,6 +69,10 @@ char *fieldNames[] = {
     "DCGM_FI_PROF_NVLINK_TX_BYTES"
 };
 
+#define SAMPLE_INTERVAL         1000000
+#define SUBSAMPLE_INTERVAL      (SAMPLE_INTERVAL / 10)
+#define RETENTION_INTERVAL      (SAMPLE_INTERVAL + 10)
+
 
 /* This will be changed by the signal handler so we exit cleanly. */
 static volatile int keep_running = 1;
@@ -268,6 +272,7 @@ void record_metrics(dcgmHandle_t handle,
         DCGM_SUMMARY_MAX |
         DCGM_SUMMARY_AVG;
 
+    /* Requests need to be in usec */
     req.startTime = then * 1000000;
     req.endTime   = now  * 1000000;
 
@@ -571,11 +576,11 @@ int mkdir_p(const char *path, mode_t mode)
 // jobenv - jobenv_t struct describing job environment
 // args - cmdargs_t describing the command line arguments
 //
-// Returns 0 on success and -1 otherwise.
+// Returns 1 on success and 0 otherwise.
 // ==========================================================================
 int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdargs_t *args)
 {
-    int  ret;
+    int  ret = 1;
     char *dirname;
     char *fname;
     char *metafname;
@@ -590,17 +595,20 @@ int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdarg
     }
     if (ret < 0)
     {
-        /* No memory! */
+        fprintf(stderr, PROGNAME": failed to allocate memory. Exiting.\n");
+        goto cleanup;
     }
     ret = asprintf(&fname, "%s/proc_%s.csv", dirname, jobenv->slurm_rank);
     if (ret < 0)
     {
-        /* No memory! */
+        fprintf(stderr, PROGNAME": failed to allocate memory. Exiting.\n");
+        goto cleanup;
     }
     ret = asprintf(&metafname, "%s/proc_%s.meta.txt", dirname, jobenv->slurm_rank);
     if (ret < 0)
     {
-        /* No memory! */
+        fprintf(stderr, PROGNAME": failed to allocate memory. Exiting.\n");
+        goto cleanup;
     }
 
     if (mkdir_p(dirname, 700))
@@ -630,12 +638,14 @@ int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdarg
         }
     }
 
+    ret = 1;
+
 cleanup:
     free(dirname);
     free(fname);
     free(metafname);
 
-    return ret;
+    return ret > 0;
 }
 
 void make_args_coherent(cmdargs_t *args)
@@ -656,6 +666,7 @@ void make_args_coherent(cmdargs_t *args)
 // ==========================================================================
 int main(int argc, char **argv)
 {
+    int main_ret = EXIT_FAILURE;
     FILE *fp = NULL;
     FILE *metafp = NULL;
     jobenv_t jobenv;
@@ -678,7 +689,7 @@ int main(int argc, char **argv)
         {
             help();
         }
-        return 0;
+        goto stop;
     }
 
     if (args.show_version)
@@ -687,7 +698,7 @@ int main(int argc, char **argv)
         {
             version();
         }
-        return 0;
+        goto stop;
     }
 
     if (args.test_only)
@@ -696,13 +707,13 @@ int main(int argc, char **argv)
         {
             run_tests();
         }
-        return 0;
+        goto stop;
     }
 
     if (args.child_argc == 0)
     {
         if (jobenv.rank0) fprintf(stderr, PROGNAME": No command given.\n");
-        return 2;
+        goto stop;
     }
 
     if (!jobenv.with_slurm)
@@ -729,7 +740,7 @@ int main(int argc, char **argv)
         // Child process
         execvp(args.child_argv[0], args.child_argv);
         /* No message here, rank0 will report */
-        return 1;
+        goto close_files;
     }
 
     // ------------------------------------------------------------------------
@@ -743,7 +754,7 @@ int main(int argc, char **argv)
                 &jobenv, &args))
     {
         /* No message, create_output_location will do that. */
-        return 1;
+        goto close_files;
     }
 
     // ------------------------------------------------------------------------
@@ -765,13 +776,13 @@ int main(int argc, char **argv)
         execvp(args.child_argv[0], args.child_argv);
         // If execvp returns, there was an error
         if (jobenv.rank0) perror("Failed to execute the command. Is it in the path?");
-        goto shutdown;
+        goto reset_sighandler;
     } 
     else if (child_pid < 0)
     {
         // Fork failed
         if (jobenv.rank0) perror("Failed to fork process. Not enough system resources?");
-        goto shutdown;
+        goto reset_sighandler;
     }
 
 
@@ -788,8 +799,8 @@ int main(int argc, char **argv)
 
     /* Connect to hostengine (standalone mode) */
     dcgmHandle_t handle;
-    CHECK_DCGM(dcgmInit());
-    CHECK_DCGM(dcgmConnect("127.0.0.1", &handle));
+    CHECK_DCGM(dcgmInit(), shutdown);
+    CHECK_DCGM(dcgmConnect("127.0.0.1", &handle), disconnect);
 
     char gpu_group_name[10+1+7+1];
     char field_group_name[7+1+7+1];
@@ -799,33 +810,26 @@ int main(int argc, char **argv)
 
     /* Create GPU group */
     dcgmGpuGrp_t gpuGroup;
-    CHECK_DCGM(dcgmGroupCreate(handle,
-                               DCGM_GROUP_EMPTY,
-                               gpu_group_name,
-                               &gpuGroup));
+    CHECK_DCGM(dcgmGroupCreate(handle, DCGM_GROUP_EMPTY, gpu_group_name, &gpuGroup), destroy_group);
 
     /* Field group */
     dcgmFieldGrp_t fieldGroup;
-    CHECK_DCGM(dcgmFieldGroupCreate(handle,
-                                    numFields,
-                                    fieldIds,
-                                    field_group_name,
-                                    &fieldGroup));
+    CHECK_DCGM(dcgmFieldGroupCreate(handle, numFields, fieldIds, field_group_name, &fieldGroup), destroy_fieldgroup);
 
     unsigned int devices[MAX_GPUS];
     int numDevices;
 
-    CHECK_DCGM(dcgmGetAllSupportedDevices(handle, devices, &numDevices));
+    CHECK_DCGM(dcgmGetAllSupportedDevices(handle, devices, &numDevices), destroy_fieldgroup);
 
     jobenv.ngpus = numDevices;
 
     for (int i = 0; i < numDevices; i++) 
     {
-        CHECK_DCGM(dcgmGroupAddDevice(handle, gpuGroup, devices[i]));
+        CHECK_DCGM(dcgmGroupAddDevice(handle, gpuGroup, devices[i]), destroy_fieldgroup);
     }
 
-    CHECK_DCGM(dcgmWatchFields(handle, gpuGroup, fieldGroup, 1000000/2, 4, 0));
-    CHECK_DCGM(dcgmUpdateAllFields(handle, 1));
+    CHECK_DCGM(dcgmWatchFields(handle, gpuGroup, fieldGroup, SUBSAMPLE_INTERVAL, RETENTION_INTERVAL, 0), destroy_fieldgroup);
+    CHECK_DCGM(dcgmUpdateAllFields(handle, 1), unwatch);
 
     // ------------------------------------------------------------------------
     // Begin the measuring loop. Keep going until the child process has ended.
@@ -838,6 +842,7 @@ int main(int argc, char **argv)
             write_meta(metafp, &args, &jobenv);
             fflush(metafp);
             fclose(metafp);
+            metafp = NULL;
         }
     }
 
@@ -846,14 +851,19 @@ int main(int argc, char **argv)
     time_t then  = start;
 
     record_t *records = (record_t *)malloc(MAX_RECORDS * sizeof(*records));
+    if (!records)
+    {
+        fprintf(stderr, PROGNAME": failed to allocation memory for records. Exiting.\n");
+        goto cleanup;
+    }
     int record_count = 0;
 
-    while (keep_running && record_count < MAX_RECORDS) {
-
+    while (keep_running && record_count < MAX_RECORDS) 
+    {
         if (child_finished(child_pid))
             break;
 
-        usleep(1000000);
+        usleep(SAMPLE_INTERVAL);
 
         time_t now = time(NULL);
 
@@ -887,7 +897,29 @@ int main(int argc, char **argv)
     // Shutdown DCGM and cleanup
     // ------------------------------------------------------------------------
 
+    main_ret = EXIT_SUCCESS;
+
+cleanup:
+    ;
+
+unwatch:
+    dcgmUnwatchFields(handle, gpuGroup, fieldGroup);
+destroy_fieldgroup:
+    dcgmFieldGroupDestroy(handle, fieldGroup);
+destroy_group:
+    dcgmGroupDestroy(handle, gpuGroup);
+disconnect:
+    dcgmDisconnect(handle);
 shutdown:
+    dcgmShutdown();
+
+reset_sighandler:
+
+    // Reset signal handlers to default
+    sa.sa_handler = SIG_DFL;
+    sigaction(SIGCHLD, &sa, NULL);
+
+close_files:
 
     if (fp) 
     {
@@ -895,16 +927,14 @@ shutdown:
         fclose(fp);
     }
 
-    // Reset signal handlers to default
-    sa.sa_handler = SIG_DFL;
-    sigaction(SIGCHLD, &sa, NULL);
+    if (metafp) 
+    {
+        fflush(metafp);
+        fclose(metafp);
+    }
 
-    dcgmUnwatchFields(handle, gpuGroup, fieldGroup);
-    dcgmFieldGroupDestroy(handle, fieldGroup);
-    dcgmGroupDestroy(handle, gpuGroup);
-    dcgmDisconnect(handle);
-    dcgmShutdown();
+stop:
 
-    return 0;
+    return main_ret;
 }
 

@@ -235,7 +235,7 @@ void test_create_output_location()
             .show_help = 0,
             .outdir = NULL,
         };
-        create_output_location(&fp, &metafp, &jobenv, &args);
+        assert(create_output_location(&fp, &metafp, &jobenv, &args));
         assert(!fclose(fp));
         struct stat st;
         assert(!stat("report_4567/step_12/proc_2.csv", &st));
@@ -260,7 +260,7 @@ void test_create_output_location()
             .show_help = 0,
             .outdir = "alt_report",
         };
-        create_output_location(&fp, &metafp, &jobenv, &args);
+        assert(create_output_location(&fp, &metafp, &jobenv, &args));
         assert(!fclose(fp));
         struct stat st;
         assert(!stat("report_4567/step_12/proc_2.csv", &st));
@@ -285,7 +285,7 @@ void test_create_output_location()
             .show_help = 0,
             .outdir = "alt_report",
         };
-        create_output_location(&fp, NULL, &jobenv, &args);
+        assert(create_output_location(&fp, NULL, &jobenv, &args));
         assert(!fclose(fp));
         struct stat st;
         assert(!stat("report_4567/step_12/proc_2.csv", &st));

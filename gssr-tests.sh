@@ -154,7 +154,7 @@ EOF
 
 # test_gr_basic
 # test_ga_basic
-# test_00_sleep
+test_00_sleep
 # test_01_dcgmproftester
 # test_02_dcgmproftester
 # test_03_signal
@@ -163,4 +163,4 @@ EOF
 # test_06_mps_wrapper
 # test_07_multi_mps_wrapper
 # test_container
-test_08_concurrent_srun
+# test_08_concurrent_srun

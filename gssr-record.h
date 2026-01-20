@@ -27,24 +27,26 @@
  * meaningful data may have been collected. */
 #define APP_RUNNING_TIME_WARNING 10
 
-#define CHECK_DCGM(call)                                      \
+#define CHECK_DCGM(call, jump_label)                          \
     do {                                                      \
         dcgmReturn_t _ret = (call);                           \
         if (_ret != DCGM_ST_OK) {                             \
             fprintf(stderr,                                  \
                     PROGNAME" %s:%i] DCGM error %d (%s)\n",                   \
                     __FILE__, __LINE__, _ret, errorString(_ret));             \
-            exit(EXIT_FAILURE);                               \
+            goto jump_label;                                 \
         }                                                     \
     } while (0)
 
-typedef struct {
+typedef struct 
+{
     unsigned short fieldId;
     int fieldType;
     double min, avg, max;
 } field_summary_t;
 
-typedef struct {
+typedef struct 
+{
     time_t ts;
     unsigned int gpuId;
     field_summary_t values[MAX_FIELDS];
