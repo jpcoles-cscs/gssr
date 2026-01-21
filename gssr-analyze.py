@@ -506,6 +506,7 @@ def title_page_table(ax, metadf):
     table.set_fontsize(10)
 
     for i, lines in enumerate(row_line_counts):  # header row = 1 line
+        lines = max(1, lines)
         table[i, 0].set_height(0.04 * lines)
         table[i, 1].set_height(0.04 * lines)
 
