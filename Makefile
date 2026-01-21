@@ -12,6 +12,7 @@ clean-tests:
 	-rm -rf test-report-*
 	-rm -rf dcgmproftester*
 	-rm -rf fp*.results
+	-rm -rf core_*
 
 install-uv:
 	curl --proto '=https' --tlsv1.2 -LsSf https://github.com/astral-sh/uv/releases/download/0.9.24/uv-installer.sh | sh
