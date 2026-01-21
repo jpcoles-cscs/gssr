@@ -326,7 +326,6 @@ void record_metrics(dcgmHandle_t handle,
                 records[*record_count].values[field_idx].max = req.response.values[1].fp64 > 2e9 ? 0 : req.response.values[1].fp64;
                 records[*record_count].values[field_idx].avg = req.response.values[2].fp64 > 2e9 ? 0 : req.response.values[2].fp64;
             }
-fprintf(stderr, PROGNAME": getting %s %i %i %f\n", fieldNames[field_idx], fieldIds[field_idx], req.response.fieldType, records[*record_count].values[field_idx].avg);
         }
 
         (*record_count)++;
