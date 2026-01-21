@@ -114,6 +114,7 @@ void test_parse_args()
         assert(args.show_help == 0);
         assert(args.child_argc == 0);
         assert(args.child_argv[0] == NULL);
+        assert(args.verbose == 0);
     }
 
     {
@@ -146,6 +147,38 @@ void test_parse_args()
         int    argc = sizeof(argv) / sizeof(argv[0]);
         parse_args(argc, argv, &args);
         assert(args.show_version == 1);
+    }
+
+    {
+        cmdargs_t args;
+        char *argv[] = {"jr", "-v"};
+        int    argc = sizeof(argv) / sizeof(argv[0]);
+        parse_args(argc, argv, &args);
+        assert(args.verbose == 1);
+    }
+
+    {
+        cmdargs_t args;
+        char *argv[] = {"jr", "-vv"};
+        int    argc = sizeof(argv) / sizeof(argv[0]);
+        parse_args(argc, argv, &args);
+        assert(args.verbose == 2);
+    }
+
+    {
+        cmdargs_t args;
+        char *argv[] = {"jr", "-vv", "-v"};
+        int    argc = sizeof(argv) / sizeof(argv[0]);
+        parse_args(argc, argv, &args);
+        assert(args.verbose == 3);
+    }
+
+    {
+        cmdargs_t args;
+        char *argv[] = {"jr", "-x"};
+        int    argc = sizeof(argv) / sizeof(argv[0]);
+        parse_args(argc, argv, &args);
+        assert(args.show_help == 0);
     }
 
     {
