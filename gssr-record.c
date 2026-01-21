@@ -82,6 +82,8 @@ char *fieldNames[] = {
 static volatile int keep_running = 1;
 static volatile pid_t child_pid = -1;
 
+static int V = 0;
+
 // ==========================================================================
 // handle_sigint - Handle SIGINT and change keep_runing so we exit cleanly.
 //
@@ -195,6 +197,14 @@ void parse_args(int argc, char **argv, cmdargs_t *args)
         if (!strcmp("-h", argv[i]) || !strcmp("--help", argv[i]))
         {
             args->show_help = 1;
+        }
+        else if (!strcmp("-v", argv[i]))
+        {
+            args->verbose += 1;
+        }
+        else if (!strcmp("-vv", argv[i]))
+        {
+            args->verbose += 2;
         }
         else if (!strcmp("--version", argv[i]))
         {
@@ -399,6 +409,9 @@ void write_meta(FILE *fp, cmdargs_t *args, jobenv_t *jobenv)
 // ==========================================================================
 void write_records(FILE *fp, int n, record_t *records, int with_header)
 {
+    assert(fp != NULL);
+    assert(records != NULL);
+
     if (with_header) 
     {
         fprintf(fp, "timestamp,gpuId");
@@ -600,6 +613,8 @@ int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdarg
     char *fname;
     char *metafname;
 
+    if (V >= 2) fprintf(stderr, PROGNAME": Creating output locations.\n");
+
     if (args->outdir)
     {
         ret = asprintf(&dirname, "%s/step_%s", args->outdir, jobenv->slurm_step);
@@ -626,6 +641,7 @@ int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdarg
         goto cleanup;
     }
 
+    if (V >= 2) fprintf(stderr, PROGNAME": Making directory %s.\n", dirname);
     if (mkdir_p(dirname, 700))
     {
         if (jobenv->rank0) fprintf(stderr, PROGNAME": Cannot create output directory %s\n", dirname);
@@ -674,6 +690,8 @@ void make_args_coherent(cmdargs_t *args)
 
     if (args->child_argc == 0)
         args->show_help = 1;
+
+    V = args->verbose;
 }
 
 // ==========================================================================
@@ -752,6 +770,7 @@ int main(int argc, char **argv)
     // ------------------------------------------------------------------------
     if (!jobenv.local0)
     {
+        if (V >= 2) fprintf(stderr, PROGNAME": Forking child.\n");
         // Child process
         execvp(args.child_argv[0], args.child_argv);
         /* No message here, rank0 will report */
@@ -800,6 +819,8 @@ int main(int argc, char **argv)
         goto reset_sighandler;
     }
 
+
+    if (V >= 2) fprintf(stderr, PROGNAME": Setting up DCGM connection.\n");
 
     // ------------------------------------------------------------------------
     // Install the signal handler that will cause our monitoring loop to exit.
@@ -854,6 +875,7 @@ int main(int argc, char **argv)
     {
         if (metafp)
         {
+            if (V >= 2) fprintf(stderr, PROGNAME": Writing metadata.\n");
             write_meta(metafp, &args, &jobenv);
             fflush(metafp);
             fclose(metafp);
@@ -873,6 +895,7 @@ int main(int argc, char **argv)
     }
     int record_count = 0;
 
+    if (V >= 2) fprintf(stderr, PROGNAME": Starting monitoring loop.\n");
     while (keep_running && record_count < MAX_RECORDS) 
     {
         if (child_finished(child_pid))
@@ -905,6 +928,8 @@ int main(int argc, char **argv)
                 APP_RUNNING_TIME_WARNING); 
     }
 
+    if (V >= 2) fprintf(stderr, PROGNAME": Waiting for children.\n");
+
     /* If a signal came in that the child handles it may need time to clean up. */
     while (!child_finished(child_pid)) {}
 
@@ -912,6 +937,7 @@ int main(int argc, char **argv)
     // Shutdown DCGM and cleanup
     // ------------------------------------------------------------------------
 
+    if (V >= 2) fprintf(stderr, PROGNAME": Made it to shutdown.\n");
     main_ret = EXIT_SUCCESS;
 
 cleanup:
@@ -949,6 +975,8 @@ close_files:
     }
 
 stop:
+
+    if (V >= 2) fprintf(stderr, PROGNAME": Exiting.\n");
 
     return main_ret;
 }

@@ -88,6 +88,7 @@ typedef struct
     char **child_argv;
     int  child_argc;
     int test_only;
+    int verbose;
 } cmdargs_t;
 
 
