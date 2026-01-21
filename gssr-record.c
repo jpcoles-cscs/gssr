@@ -642,7 +642,7 @@ int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdarg
     }
 
     if (V >= 2) fprintf(stderr, PROGNAME": Making directory %s.\n", dirname);
-    if (mkdir_p(dirname, 700))
+    if (mkdir_p(dirname, S_IRWXU))
     {
         if (jobenv->rank0) fprintf(stderr, PROGNAME": Cannot create output directory %s\n", dirname);
         ret = -1;
@@ -774,7 +774,7 @@ int main(int argc, char **argv)
         // Child process
         execvp(args.child_argv[0], args.child_argv);
         /* No message here, rank0 will report */
-        goto close_files;
+        goto stop;
     }
 
     // ------------------------------------------------------------------------
