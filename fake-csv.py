@@ -58,8 +58,8 @@ def main():
 
             for gpu in range(args.gpus):
 
-                base = math.sin(i / 10.0) + 1.5
-                base2 = math.cos(i / 15.0) + 1.5
+                base = (math.sin(i / 10.0 + gpu) + 1.) / 2
+                base2 = (math.cos(i / 15.0 + gpu) + 1.) / 2
 
                 row = [i, gpu]
 
@@ -67,8 +67,8 @@ def main():
                 n_triplets = (len(columns) - 2) // 3
 
                 for j in range(n_triplets):
-                    avg = 50 * (base + 0.1 * j)
-                    spread = 5 * abs(math.sin(i + j))
+                    avg = base #.50 * (base + 0.1 * j)
+                    spread = .05 * abs(math.sin(i + j))
                     row.extend([
                         avg - spread,
                         avg,

@@ -45,6 +45,12 @@ function test_00_sleep()
     $GR -o test-report-00 -- sleep 5 && cat test-report-00/step_0/proc_0.{csv,meta.txt}
 }
 
+function test_00_dir_permission()
+{
+    $GR -o $SCRATCH/gssr-test -- sleep 1
+    ls -ld $SCRATCH/gssr-test
+}
+
 function test_01_dcgmproftester()
 {
     srun -N2 -n6 $GR -o test-report-01 /usr/bin/dcgmproftester12 -t 1006 -d 20 \
@@ -165,4 +171,5 @@ EOF
 # test_06_mps_wrapper
 # test_07_multi_mps_wrapper
 # test_container
-test_08_concurrent_srun
+#test_08_concurrent_srun
+test_00_dir_permission

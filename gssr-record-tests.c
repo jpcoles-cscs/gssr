@@ -285,6 +285,8 @@ void test_create_output_location()
         assert(create_output_location(&fp, &metafp, &jobenv, &args));
         assert(!fclose(fp));
         struct stat st;
+        assert(!stat("report_4567/step_12", &st));
+        assert((st.st_mode & S_IRWXU) == S_IRWXU);
         assert(!stat("report_4567/step_12/proc_2.csv", &st));
         printf("Created report_4567/step_12/proc_2.csv.\n");
         assert(!stat("report_4567/step_12/proc_2.meta.txt", &st));
