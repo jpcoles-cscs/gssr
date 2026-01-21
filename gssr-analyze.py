@@ -163,9 +163,12 @@ def plot_memory_metrics(ax, df):
 
         n_bins = 20 
         y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=(0,100))
-        yeps = rng.integers(low=0, high=2, size=len(y))
-        yeps[y <= 0] = 0
-        xeps = rng.integers(low=0, high=2, size=len(y))
+        if np.amax(y) < 20:
+            xeps, yeps = 0,0
+        else:
+            yeps = rng.integers(low=0, high=2, size=len(y))
+            yeps[y <= 0] = 0
+            xeps = rng.integers(low=0, high=2, size=len(y))
         ax[1].plot(y + yeps, bins[0:-1] + xeps, alpha=0.8, color=c, lw=1.0, drawstyle='steps')
 
     ax[1].set_title('Histogram', fontsize=6)
@@ -215,14 +218,17 @@ def plot_txrx_metrics(ax, df):
 
         n_bins = 20 
         y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=data_range)
-        #yeps = rng.integers(low=0, high=2, size=len(y))
-        #yeps[y <= 0] = 0
-        #xeps = rng.integers(low=0, high=2, size=len(y))
-        #ax[1].plot(y + yeps, bins[0:-1] + xeps, alpha=0.8, color=c, lw=1.0, drawstyle='steps')
+        if np.amax(y) < 20:
+            xeps, yeps = 0,0
+        else:
+            yeps = rng.integers(low=0, high=2, size=len(y))
+            yeps[y <= 0] = 0
+            xeps = rng.integers(low=0, high=2, size=len(y))
         ax[1].plot(y, bins[0:-1], alpha=0.8, color=c, lw=1.0, drawstyle='steps')
 
     ax[0].set_xlabel('Time (s)')
     ax[0].set_ylabel(f'Data Movement (MB/s)', labelpad=10)
+    ax[0].set_ylim(ymin=-5, ymax=max(ax[0].get_ylim()[1]+5, 50))
 
     ax[1].set_title('Histogram', fontsize=6)
     ax[1].set_xlabel('% of Runtime')
@@ -280,9 +286,12 @@ def plot_active_metrics(ax, df):
         n_bins = 20 #min(100, max(10, int(np.ceil(np.sqrt(len(y_avg))))))
         y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=(0,100))
 
-        yeps = rng.integers(low=0, high=2, size=len(y))
-        yeps[y <= 0] = 0
-        xeps = rng.integers(low=0, high=2, size=len(y))
+        if np.amax(y) < 20:
+            xeps, yeps = 0,0
+        else:
+            yeps = rng.integers(low=0, high=2, size=len(y))
+            yeps[y <= 0] = 0
+            xeps = rng.integers(low=0, high=2, size=len(y))
         ax[1].plot(y + yeps, bins[0:-1] + xeps, alpha=0.8, color=c, lw=1.0, drawstyle='steps')
 
     ax[0].set_xlabel('Time (s)')
@@ -344,9 +353,12 @@ def plot_energy_metrics(ax, df):
     n_bins = 20 #min(100, max(10, int(np.ceil(np.sqrt(len(y_avg))))))
     y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=data_range)
 
-    yeps = rng.integers(low=0, high=2, size=len(y))
-    yeps[y <= 0] = 0
-    xeps = rng.integers(low=0, high=2, size=len(y))
+    if np.amax(y) < 20:
+        xeps, yeps = 0,0
+    else:
+        yeps = rng.integers(low=0, high=2, size=len(y))
+        yeps[y <= 0] = 0
+        xeps = rng.integers(low=0, high=2, size=len(y))
     ax[1].plot(y + yeps, bins[0:-1] + xeps, alpha=0.8, color=c, lw=1.0, drawstyle='steps')
 
     metric,scale,c,_ = cfg[1]
@@ -360,17 +372,21 @@ def plot_energy_metrics(ax, df):
     n_bins = 20 #min(100, max(10, int(np.ceil(np.sqrt(len(y_avg))))))
     y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=data_range)
 
-    yeps = rng.integers(low=0, high=2, size=len(y))
-    yeps[y <= 0] = 0
-    xeps = rng.integers(low=0, high=2, size=len(y))
+    if np.amax(y) < 20:
+        xeps, yeps = 0,0
+    else:
+        yeps = rng.integers(low=0, high=2, size=len(y))
+        yeps[y <= 0] = 0
+        xeps = rng.integers(low=0, high=2, size=len(y))
     ax1t.plot(y + yeps, bins[0:-1] + xeps, alpha=0.8, color=c, lw=1.0, drawstyle='steps')
     ax1t.tick_params(labelright=False)
 
     ax[0].set_xlabel('Time (s)')
     ax[0].set_ylabel(f'GPU Energy Usage (Wh)', labelpad=10)
-    ax[0].set_ylim(ymin=-5) #, ymax=105)
+    ax[0].set_ylim(ymin=-5, ymax=max(ax[0].get_ylim()[1]+5, 50))
 
     ax0t.set_ylabel(f'GPU Power (W)', labelpad=10)
+    ax0t.set_ylim(ymin=-5, ymax=max(ax0t.get_ylim()[1]+5, 50))
 
     ax[1].set_title('Histogram', fontsize=6)
     ax[1].set_xlabel('% of Runtime')
@@ -855,7 +871,7 @@ def evaluation(pdf, df, metadf):
         [df['DCGM_FI_DEV_GPU_UTIL_avg'].mean(), '%.2f',
             [[ 25, 'poor',        'The global average GPU utilization is poor and below acceptable use of node resources.'],
              [ 50, 'improve',     'The global average GPU utilization is below acceptable limits.'],
-             [ 75, 'acceptable',  'The global average GPU utilization could be improved by is an acceptable use of node resources.'],
+             [ 75, 'acceptable',  'The global average GPU utilization could be improved.'],
              [100, 'good',        'The global average GPU utilization is a good use of node resources.'],
             ]
         ],
@@ -866,7 +882,7 @@ def evaluation(pdf, df, metadf):
             'DCGM_FI_PROF_PIPE_FP16_ACTIVE_avg']].sum(axis=1).mean(), '%.2f',
             [[1/16., 'poor',        'The global average FP utilization is poor and below acceptable use of node resources.'],
              [1/8. , 'improve',     'The global average FP utilization is below acceptable limits.'],
-             [1/4. , 'acceptable',  'The global average FP utilization could be improved by is an acceptable use of node resources.'],
+             [1/4. , 'acceptable',  'The global average FP utilization could be improved.'],
              [4    , 'good',        'The global average FP utilization is a good use of node resources.'],
             ] 
         ]
