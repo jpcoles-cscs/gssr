@@ -843,8 +843,16 @@ int main(int argc, char **argv)
 
     /* Connect to hostengine (standalone mode) */
     dcgmHandle_t handle;
-    CHECK_DCGM(dcgmInit(), shutdown);
-    CHECK_DCGM(dcgmConnect("127.0.0.1", &handle), disconnect);
+    if (dcgmInit() != DCGM_ST_OK)
+    {
+        fprintf(stderr, PROGNAME": Unable to initialize DCGM. Command will not be monitored.\n");
+        goto reset_sighandler;
+    }
+    if (dcgmConnect("127.0.0.1", &handle) != DCGM_ST_OK)
+    {
+        fprintf(stderr, PROGNAME": Unable to connect to DCGM host engine at 127.0.0.1. Command will not be monitored.\n");
+        goto shutdown;
+    }
 
     char gpu_group_name[10+1+7+1];
     char field_group_name[7+1+7+1];
@@ -854,26 +862,51 @@ int main(int argc, char **argv)
 
     /* Create GPU group */
     dcgmGpuGrp_t gpuGroup;
-    CHECK_DCGM(dcgmGroupCreate(handle, DCGM_GROUP_EMPTY, gpu_group_name, &gpuGroup), destroy_group);
+    if (dcgmGroupCreate(handle, DCGM_GROUP_EMPTY, gpu_group_name, &gpuGroup) != DCGM_ST_OK)
+    {
+        fprintf(stderr, PROGNAME": Unable to create a DCGM monitoring group. Command will not be monitored.\n");
+        goto disconnect;
+    }
 
     /* Field group */
     dcgmFieldGrp_t fieldGroup;
-    CHECK_DCGM(dcgmFieldGroupCreate(handle, numFields, fieldIds, field_group_name, &fieldGroup), destroy_fieldgroup);
+    if (dcgmFieldGroupCreate(handle, numFields, fieldIds, field_group_name, &fieldGroup) != DCGM_ST_OK)
+    {
+        fprintf(stderr, PROGNAME": Unable to create a DCGM monitoring field group. Command will not be monitored.\n");
+        goto destroy_fieldgroup;
+    }
 
     unsigned int devices[MAX_GPUS];
     int numDevices;
 
-    CHECK_DCGM(dcgmGetAllSupportedDevices(handle, devices, &numDevices), destroy_fieldgroup);
+    if (dcgmGetAllSupportedDevices(handle, devices, &numDevices) != DCGM_ST_OK)
+    {
+        fprintf(stderr, PROGNAME": Unable determine supported devices. Command will not be monitored.\n");
+        goto destroy_fieldgroup;
+    }
 
     jobenv.ngpus = numDevices;
 
     for (int i = 0; i < numDevices; i++) 
     {
-        CHECK_DCGM(dcgmGroupAddDevice(handle, gpuGroup, devices[i]), destroy_fieldgroup);
+        if (dcgmGroupAddDevice(handle, gpuGroup, devices[i]) != DCGM_ST_OK)
+        {
+            fprintf(stderr, PROGNAME": Unable add device %i to be monitored. Command will not be monitored.\n", i);
+            goto destroy_fieldgroup;
+        }
     }
 
-    CHECK_DCGM(dcgmWatchFields(handle, gpuGroup, fieldGroup, SUBSAMPLE_INTERVAL, RETENTION_INTERVAL, 0), destroy_fieldgroup);
-    CHECK_DCGM(dcgmUpdateAllFields(handle, 1), unwatch);
+    if (dcgmWatchFields(handle, gpuGroup, fieldGroup, SUBSAMPLE_INTERVAL, RETENTION_INTERVAL, 0) != DCGM_ST_OK)
+    {
+        fprintf(stderr, PROGNAME": Unable monitor the requested fields. Command will not be monitored.\n");
+        goto destroy_fieldgroup;
+    }
+
+    if (dcgmUpdateAllFields(handle, 1) != DCGM_ST_OK)
+    {
+        fprintf(stderr, PROGNAME": Unable monitor the requested fields. Command will not be monitored.\n");
+        goto unwatch;
+    }
 
     // ------------------------------------------------------------------------
     // Begin the measuring loop. Keep going until the child process has ended.
