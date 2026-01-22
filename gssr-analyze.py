@@ -783,15 +783,23 @@ def heatmaps(pdf, df):
             columns='timestamp',       # columns = time
             values=metric              # values to populate the matrix
         )
-        xy = xy.fillna(0.0).to_numpy() * scale
+        x = xy.columns
+        y = range(len(xy.index))
+        vals = xy.fillna(0.0).to_numpy() * scale
     
 
         clrs = copy.copy(cmap_func(cmap))
         clrs.set_under('white')
 
-        # Plot the actual y line over the shaded area
-        im = ax1.imshow(xy, aspect='auto', interpolation='nearest', origin='upper', extent=(-0.5, xy.shape[1] - 0.5, xy.shape[0] - 0.5, -0.5),
-                   vmin=1, vmax=100, cmap=clrs)
+        im = ax1.pcolormesh(
+            x,
+            y,
+            vals,
+            shading="nearest",
+            vmin=1, vmax=100, cmap=clrs,
+            rasterized=True,
+        )
+
         cbar = pl.colorbar(im, ax=ax1, extend='both')
 
         ax1.set_xlabel('Time (s)')
