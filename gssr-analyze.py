@@ -26,6 +26,7 @@ import re
 
 import numpy as np
 import pandas as pd
+import matplotlib as mpl
 from matplotlib import cm
 import matplotlib.pyplot as pl
 from matplotlib.backends.backend_pdf import PdfPages
@@ -103,13 +104,13 @@ def load_metrics_and_meta(paths):
                     df['proc'] = iproc
 
                     # Count the number of unique GPUs this step monitored
-                    ngpus += df.groupby(["step", "proc"])["gpuId"].nunique()
+                    ngpus += df["gpuId"].nunique()
 
                     frames.append(df)
                 except pd.errors.EmptyDataError:
                     pass
 
-            metadf['unique gpus'] = ngpus.to_numpy()
+            metadf['unique gpus'] = ngpus
 
     if not frames or not meta:
         return None, None
@@ -198,10 +199,13 @@ def plot_txrx_metrics(ax, df):
     """
 
     cfg = [
-        ['DCGM_FI_PROF_PCIE_TX_BYTES_avg',      1e-6, 'g',        'PCIe Send'], 
-        ['DCGM_FI_PROF_PCIE_RX_BYTES_avg',      1e-6, 'r',        'PCIe Recv'],
+        ['DCGM_FI_PROF_PCIE_TX_BYTES_avg',      1e-6, 'limegreen',        'PCIe Send'], 
+        ['DCGM_FI_PROF_PCIE_RX_BYTES_avg',      1e-6, 'darkgreen',        'PCIe Recv'],
         ['DCGM_FI_PROF_NVLINK_TX_BYTES_avg',    1e-6, 'b',        'NVLink Send'],
-        ['DCGM_FI_PROF_NVLINK_RX_BYTES_avg',    1e-6, 'orange',   'NVLink Recv']]
+        ['DCGM_FI_PROF_NVLINK_RX_BYTES_avg',    1e-6, 'darkblue',   'NVLink Recv'],
+        ['DCGM_FI_PROF_C2C_TX_ALL_BYTES',       1e-6, 'orange',        'C2C Send'],
+        ['DCGM_FI_PROF_C2C_RX_ALL_BYTES',       1e-6, 'darkorange',   'C2C Recv']]
+    cfg = [c for c in cfg if c[0] in df.columns]
 
     x = df['timestamp']
 
@@ -797,6 +801,12 @@ def heatmaps(pdf, df):
         ['DCGM_FI_PROF_PIPE_FP16_ACTIVE_avg',   100, 'b', 'fp16',   'Blues'],
         ]
 
+    from packaging import version
+    if version.parse(mpl.__version__) >= version.parse("3.7"):
+        cmap_func = mpl.colormaps.get_cmap
+    else:
+        cmap_func = cm.get_cmap
+
 
     for i,[metric,scale,c,label,cmap] in enumerate(cfg):
         ax1 = axes[i,0]
@@ -807,7 +817,8 @@ def heatmaps(pdf, df):
         )
         xy = xy.fillna(0.0).to_numpy() * scale
     
-        clrs = copy.copy(cm.get_cmap(cmap))
+
+        clrs = copy.copy(cmap_func(cmap))
         clrs.set_under('white')
 
         # Plot the actual y line over the shaded area
