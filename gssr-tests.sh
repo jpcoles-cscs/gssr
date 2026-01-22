@@ -15,7 +15,7 @@ GR=$(realpath ../gssr-record)
 set -x
 #set -e
 
-#make -f ../Makefile clean-tests
+make -f ../Makefile clean-tests
 
 function test_gr_basic()
 {
@@ -160,16 +160,16 @@ EOF
     $GA test-report-08 -o test-report-08.pdf
 }
 
-# test_gr_basic
-# test_ga_basic
-# test_00_sleep
-# test_01_dcgmproftester
-# test_02_dcgmproftester
-# test_03_signal
-# test_04_long_running
-# test_05_sphexa
-# test_06_mps_wrapper
-# test_07_multi_mps_wrapper
-# test_container
-#test_08_concurrent_srun
+test_gr_basic
+test_ga_basic
+test_00_sleep
+test_01_dcgmproftester
+test_02_dcgmproftester
+test_03_signal
+test_04_long_running
+test_05_sphexa
+test_06_mps_wrapper
+test_07_multi_mps_wrapper
+test_container
+test_08_concurrent_srun
 test_00_dir_permission
