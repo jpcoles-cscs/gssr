@@ -1,5 +1,5 @@
-# gssr
-A new simplified version of the GPU saturation scorer for CSCS workloads
+# GPU saturation scorer
+A practical monitoring and reporting tool that reports how Nvidia GPU resources are actually exercised during production jobs.
 
 # Getting Started
 The analysis tool depends on uv to create a python environment with the
@@ -12,6 +12,13 @@ To create the gssr-record executable run
 ```bash
 make
 ```
+
+A simple example to test the setup is to record a few seconds of no activity.
+```bash
+./gssr-record -o gr-sleep-test sleep 30
+./gssr-analyze.py gr-sleep-test -o gr-sleep-test-report.pdf
+```
+
 
 # Recording Metrics
 ```bash
@@ -31,7 +38,7 @@ your container EDF file:
 com.hooks.dcgm.enabled = "true"
 ```
 
-# Generating a report
+# Generating a Report
 ```bash
 usage: gssr-analyze.py [-h] [-o OUTPUT] [directory ...]
 
@@ -44,11 +51,4 @@ options:
   -h, --help            show this help message and exit
   -o OUTPUT, --output OUTPUT
                         Output PDF filename (default: gssr-report.pdf)
-```
-
-# Quick Start Example
-A simple example to test the setup is to record a few seconds of no activity.
-```bash
-./gssr-record -o gr-sleep-test sleep 30
-./gssr-analyze.py gr-sleep-test -o gr-sleep-test-report.pdf
 ```
