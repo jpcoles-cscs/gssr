@@ -160,6 +160,7 @@ EOF
     $GA test-report-08 -o test-report-08.pdf
 }
 
+
 test_gr_basic
 test_ga_basic
 test_00_sleep

@@ -63,33 +63,32 @@ def load_metrics_and_meta(paths):
             meta_files = glob.glob(os.path.join(step, 'proc_*.meta.txt'))
             proc_files = glob.glob(os.path.join(step, 'proc_*.csv'))
 
-            if len(meta_files) == 0:
-                print(f'Missing metadata file in {step}. Skipping.')
-                continue
-
             if len(meta_files) > 1:
                 print(f'Too many metadata files in {step}. Skipping.')
                 continue
 
-            meta_file = meta_files[0]
+            if len(meta_files) == 0:
+                print(f'Missing metadata file in {step}. Attempting to continue.')
+                metadf = dict()
+            else:
+                meta_file = meta_files[0]
 
-            m = re.search(r"step_(\d+)/proc_(\d+)\.meta\.txt$", meta_file)
-            istep, iproc = int(m.group(1)), int(m.group(2))
+                m = re.search(r"step_(\d+)/proc_(\d+)\.meta\.txt$", meta_file)
+                istep, iproc = int(m.group(1)), int(m.group(2))
 
-            try:
-                with open(meta_file) as f:
-                    metadf = pd.DataFrame([json.load(f)])
-            except json.decoder.JSONDecodeError as e:
-                print(f'Error reading {meta_file}. Skipping. {e}')
-                continue
+                try:
+                    with open(meta_file) as f:
+                        metadf = json.load(f)
+                except json.decoder.JSONDecodeError as e:
+                    print(f'Error reading {meta_file}. Attempting to continue. {e}')
+                    metadf = dict()
 
-            metadf['report'] = path
-            metadf['step'] = istep
-            metadf['proc'] = 10 #iproc
-            meta.append(metadf)
+            m = re.search(r"step_(\d+)$", step)
+            istep = int(m.group(1))
 
-            ngpus = 0
+            ngpus  = 0
             energy = 0
+            appended_frames = 0
             for proc_file in proc_files:
 
                 m = re.search(r"step_(\d+)/proc_(\d+)\.csv$", proc_file)
@@ -104,21 +103,25 @@ def load_metrics_and_meta(paths):
                     df['proc'] = iproc
 
                     # Count the number of unique GPUs this step monitored
-                    ngpus += df['gpuId'].nunique()
+                    ngpus  += df['gpuId'].nunique()
                     energy += df['DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION_avg'].sum()
 
                     frames.append(df)
+                    appended_frames += 1
                 except pd.errors.EmptyDataError:
                     pass
 
-            metadf['unique gpus'] = ngpus
-            metadf['gpu energy (mJ)'] = energy
+            if appended_frames == 0:
+                print(f'No metric data found for {step}. Attempting to continue.')
 
-    if not frames or not meta:
-        return None, None
+            metadf['report'] = [path]
+            metadf['step'] = [istep]
+            metadf['unique gpus'] = [ngpus]
+            metadf['gpu energy (mJ)'] = [energy]
+            meta.append(pd.DataFrame(metadf))
 
-    df     = pd.concat(frames, ignore_index=True)
-    metadf = pd.concat(meta,   ignore_index=True)
+    df     = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    metadf = pd.concat(meta,   ignore_index=True) if meta   else pd.DataFrame()
 
     return df, metadf
 
@@ -455,6 +458,20 @@ def title_page_table(ax, metadf):
 
     wrap_width = 45  # wrap lines at 30 characters
 
+    if metadf is None:
+        # Create table
+        table = ax.table(
+            cellText=['No data found'],
+            cellLoc='center',
+            loc='top',
+            bbox = (0,0,1,0.5),
+        )
+
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        
+        return
+
     m = metadf.iloc[0].to_dict()
 
     energy = m.get('gpu energy (mJ)', 0) * 1e-3 * 0.000277778
@@ -467,7 +484,7 @@ def title_page_table(ax, metadf):
         [ 'Node Count',             '%s (of %s)' % (m.get('step_nnodes',  'missing'), m.get('nnodes',  'unknown'))  ],
         [ 'Task Count',             '%s (of %s)' % (m.get('step_ntasks',  'missing'), m.get('ntasks',  'unknown'))  ],
         [ 'GPU Count',              m.get('unique gpus',  'missing')  ],
-        [ 'GPU Energy Use',         '%.2f Wh' % energy if energy > 0 else 'missing'  ],
+        [ 'GPU Energy Use',         ('%.2g Wh' % energy) if energy > 0 else 'missing'  ],
         [ 'Executable',             m.get('executable',   'missing')  ],
         [ 'Arguments',              m.get('arguments',    'missing')  ],
     ]
@@ -554,12 +571,22 @@ def title_page(pdf, df, metadf):
         color='gray'
     )
 
+    if df is None:
+        fig.text(
+            0.5, 0.7,
+            'This jobstep has no data',
+            ha='center',
+            va='center',
+            fontsize=18,
+            fontweight='bold',
+            c='red'
+        )
+
     title_page_table(ax, metadf)
 
     pdf.savefig(fig)
     pl.close(fig)
 
-    pass
 
 def definitions_page(pdf):
     """
@@ -948,9 +975,13 @@ def one_report(pdf, metadf, df):
     None
     """
 
+    if df is None:
+        title_page(pdf, None, metadf)
+        return
+
     rdf = reduced_df(df)
 
-    title_page(pdf, rdf, metadf)
+    title_page(pdf, df, metadf)
     evaluation(pdf, df, metadf)
     plots(pdf, rdf)
     heatmaps(pdf, df)
@@ -974,16 +1005,19 @@ def report(paths, pdfname):
 
     df, metadf = load_metrics_and_meta(paths)
 
-    if df is None:
-        print("No metric data found. Stopping.")
-        sys.exit(0)
+    if metadf.empty:
+        print(f'Could not load any data from given paths. No report generated.')
+        return
 
     with PdfPages(pdfname) as pdf:
 
         for [group, gmdf] in metadf.groupby(['report', 'step']):
             report,step = group
-            gdf = df[(df["report"] == report) & (df["step"] == step)]
-            gdf.reset_index(inplace=True, drop=True)
+            if df.empty:
+                gdf = None
+            else:
+                gdf = df[(df["report"] == report) & (df["step"] == step)]
+                gdf.reset_index(inplace=True, drop=True)
 
             one_report(pdf, gmdf, gdf)
 
