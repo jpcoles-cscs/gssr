@@ -81,9 +81,9 @@ char *fieldNames[] = {
     "DCGM_FI_DEV_POWER_USAGE"
 };
 
-#define SAMPLE_INTERVAL         2000000
-#define SUBSAMPLE_INTERVAL      (SAMPLE_INTERVAL / 10)
-#define RETENTION_INTERVAL      (SAMPLE_INTERVAL + 10)
+#define SAMPLE_INTERVAL         1000000
+#define SUBSAMPLE_INTERVAL      (SAMPLE_INTERVAL / 5)
+#define RETENTION_INTERVAL      (SAMPLE_INTERVAL + 60)
 
 
 /* This will be changed by the signal handler so we exit cleanly. */
