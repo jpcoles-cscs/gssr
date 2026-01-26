@@ -616,31 +616,86 @@ def definitions_page(pdf):
         fontweight='bold'
     )
 
+    fig.text(
+        0.1, 0.93,
+        'From Nvidia Documentation',
+        ha='left',
+        va='top',
+        fontsize=12,
+        fontstyle='italic',
+        color='gray'
+    )
 
     col0_width = 25
-    col1_width = 45
+    col1_width = 55
 
     table_data = [
-        [ 'GPU Utilization (%)',                  'Percent of time over the processÕs lifetime during which one or more kernels was executing on the GPU.' ],
-        [ 'SM Active (%)',                        'The ratio of cycles an SM has at least 1 warp assigned (computed from the number of cycles and elapsed cycles)' ],
-        [ 'SM Occupancy (%)',                     'Occupancy is defined as the ratio of active warps on an SM to the maximum number of active warps supported by the SM' ],
-        [ 'Tensor Active (%)',                    'The ratio of cycles the any tensor pipe is active (off the peak sustained elapsed cycles)' ],
-        [ 'FP Active (%) for FP64, FP32, FP16',   'Ratio of cycles of that a particular floating point (fp64, fp32 or fp16) pipe is active.' ],
-        [ 'GPU Memory (MB) Used/Free/Reserved',     'Used/Free/Reserved Frame Buffer of the GPU in MB' ],
-        [ 'NVLink Send/Recv (byte/s)',          'The rate of data transmitted / received over NVLink, not including protocol headers. (NVLink bandwidth)' ],
-        [ 'PCIe Send/Recv bytes (byte/s)',            'The rate of data transmitted / received over the PCIe bus, including both protocol headers and data payloads. (PCIe bandwidth)' ]
+        [ 'GPU Memory (MB) Used/Free/Reserved',
+             'Used/Free/Reserved Frame Buffer of the GPU in MB' ],
+        [ 'GPU Utilization (%)',
+             'The fraction of time any portion of the graphics or compute engines' +
+             'were active. The graphics engine is active if a graphics/compute' +
+             'context is bound and the graphics/compute pipe is busy. The value' +
+             'represents an average over a time interval and is not an instantaneous' +
+             'value.'],
+        [ 'SM Active (%)',
+             'The fraction of time at least one warp was active on a' +
+             'multiprocessor, averaged over all multiprocessors. Note that "active"' +
+             'does not necessarily mean a warp is actively computing.' +
+             'Warps waiting on memory requests are considered active. The value' +
+             'represents an average over a time interval and is not an instantaneous' +
+             'value. '],
+        [ 'SM Occupancy (%)',
+             'The fraction of resident warps on a multiprocessor, relative to the' +
+             'maximum number of concurrent warps supported on a multiprocessor. The' +
+             'value represents an average over a time interval and is not an' +
+             'instantaneous value. Higher occupancy does not necessarily indicate' +
+             'better GPU usage. For GPU memory bandwidth limited workloads, higher' +
+             'occupancy is indicative of more effective GPU usage. However if the' +
+             'workload is compute limited, then higher occupancy does not' +
+             'necessarily correlate with more effective GPU usage.'],
+
+        [ 'Tensor Active (%)',
+             'The fraction of cycles the tensor (HMMA / IMMA) pipe was active. The' +
+             'value represents an average over a time interval and is not an' +
+             'instantaneous value. Higher values indicate higher utilization of the' +
+             'Tensor Cores. An activity of 100% is equivalent to issuing a' +
+             'tensor instruction every other cycle for the entire time interval.'],
+
+        [ 'FP Active (%) for FP64, FP32, FP16',
+             'The fraction of cycles the respective float-point pipe was' +
+             'active. The value represents an average over a time interval and is' +
+             'not an instantaneous value. Higher values indicate higher utilization' +
+             'of the floating-point cores.'],
+        [ 'DRAM Active (%)',
+             'The fraction of cycles where data was sent to or received from' +
+             'device memory. The value represents an average over a time' +
+             'interval and is not an instantaneous value. Higher values indicate' +
+             'higher utilization of device memory. An activity of 100% is' +
+             'equivalent to a DRAM instruction every cycle over the entire time' +
+             'interval (in practice a peak of ~0.8 (80%) is the maximum' +
+             'achievable).'],
+        [ 'NVLink Send/Recv Bandwidth (byte/s)',
+             'The rate of data transmitted / received over NVLink, not' +
+             'including protocol headers. The theoretical maximum NVLink Gen2' +
+             'bandwidth is 25 GB/s per link per direction.' ],
+        [ 'PCIe Send/Recv Bandwidth (byte/s)',
+             'The rate of data transmitted / received over the PCIe bus, including' +
+             'both protocol headers and data payloads. The theoretical maximum PCIe' +
+             'Gen3 bandwidth is 985 MB/s per lane.']
     ]
 
     row_line_counts = []  # to store number of lines per row
     for row in table_data:
         label, val = row
-        val_str = str(val)
-        col1 = textwrap.wrap(val_str, width=col1_width, max_lines=20)
-        row[1] = '\n'.join(col1)
 
         val_str = str(label)
         col0 = textwrap.wrap(val_str, width=col0_width, max_lines=20)
         row[0] = '\n'.join(col0)
+
+        val_str = str(val)
+        col1 = textwrap.wrap(val_str, width=col1_width, max_lines=20)
+        row[1] = '\n'.join(col1)
         row_line_counts.append(max(len(col0),len(col1)))
 
     # Create table
@@ -653,7 +708,7 @@ def definitions_page(pdf):
     )
 
     table.auto_set_font_size(False)
-    table.set_fontsize(10)
+    table.set_fontsize(8)
 
     for i, lines in enumerate(row_line_counts):  # header row = 1 line
         table[i, 0].set_height(0.01 * lines)
