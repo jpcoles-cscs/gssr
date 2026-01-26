@@ -160,17 +160,42 @@ EOF
     $GA test-report-08 -o test-report-08.pdf
 }
 
+function test_09_overlapping_srun()
+{
+    cat > test-report-09.sh <<EOF
+#!/bin/bash
+#SBATCH -J test-report-09
+#SBATCH -t 05:00
+#SBATCH -N1
+# BATCH -n4
+#SBATCH -A csstaff
+#SBATCH --gpus-per-node=1
+#SBATCH -o test-report-09.slurm.out
+#SBATCH --exclusive --mem=450G
 
-test_gr_basic
-test_ga_basic
-test_00_sleep
-test_01_dcgmproftester
-test_02_dcgmproftester
-test_03_signal
-test_04_long_running
-test_05_sphexa
-test_06_mps_wrapper
-test_07_multi_mps_wrapper
-test_container
-test_08_concurrent_srun
-test_00_dir_permission
+
+srun --overlap -N1 --ntasks-per-node=1 --gpus-per-task=1 --cpus-per-gpu=5 --mem=50G  $GR -o test-report-09 /usr/bin/dcgmproftester12 --max-processes 1 -t 1006 -d 20 &
+srun --overlap -N1 --ntasks-per-node=1 --gpus-per-task=1 --cpus-per-gpu=5 --mem=50G  $GR -o test-report-09 /usr/bin/dcgmproftester12 --max-processes 1 -t 1007 -d 20 &
+
+wait
+EOF
+
+    sbatch -W test-report-09.sh
+    $GA test-report-09 -o test-report-09.pdf
+}
+
+
+#test_gr_basic
+#test_ga_basic
+#test_00_sleep
+#test_01_dcgmproftester
+#test_02_dcgmproftester
+#test_03_signal
+#test_04_long_running
+#test_05_sphexa
+#test_06_mps_wrapper
+#test_07_multi_mps_wrapper
+#test_container
+#test_08_concurrent_srun
+#test_00_dir_permission
+test_09_overlapping_srun
