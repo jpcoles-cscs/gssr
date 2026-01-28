@@ -122,7 +122,7 @@ void test_parse_args()
         char *argv[] = {"jr", "-x"};
         int    argc = sizeof(argv) / sizeof(argv[0]);
         parse_args(argc, argv, &args);
-        assert(args.show_help == 0);
+        assert(args.show_help == 1);
     }
 
     {
@@ -178,7 +178,7 @@ void test_parse_args()
         char *argv[] = {"jr", "-x"};
         int    argc = sizeof(argv) / sizeof(argv[0]);
         parse_args(argc, argv, &args);
-        assert(args.show_help == 0);
+        assert(args.show_help == 1);
     }
 
     {

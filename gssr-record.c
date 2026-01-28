@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/wait.h>
+#include <sys/statfs.h>
 //#include <dlfcn.h>
 
 #include <sys/stat.h>
@@ -202,53 +203,66 @@ void parse_args(int argc, char **argv, cmdargs_t *args)
     int i;
     for (i=1; i < argc; i++)
     {
-        if (!strcmp("-h", argv[i]) || !strcmp("--help", argv[i]))
+        if (argv[i][0] != '-')
         {
-            args->show_help = 1;
+            break;
         }
-        else if (!strcmp("-v", argv[i]))
+        else
         {
-            args->verbose += 1;
-        }
-        else if (!strcmp("-vv", argv[i]))
-        {
-            args->verbose += 2;
-        }
-        else if (!strcmp("--version", argv[i]))
-        {
-            args->show_version = 1;
-        }
-        else if (!strcmp("-o", argv[i]))
-        {
-            if (i+1 < argc)
-            {
-                i++;
-                if (!strcmp("--", argv[i])) 
-                {
-                    fprintf(stderr, PROGNAME": Missing directory argument to -o\n");
-                    args->show_help = 1;
-                }
-                else
-                {
-                    args->outdir = argv[i];
-                }
-            }
-            else
+            if (!strcmp("-h", argv[i]) || !strcmp("--help", argv[i]))
             {
                 args->show_help = 1;
             }
-        }
-        else if (!strcmp("--test-only", argv[i]))
-        {
-            args->test_only = 1;
-        }
-        else 
-        {
-            if (!strcmp("--", argv[i])) 
+            else if (!strcmp("-v", argv[i]))
+            {
+                args->verbose += 1;
+            }
+            else if (!strcmp("-vv", argv[i]))
+            {
+                args->verbose += 2;
+            }
+            else if (!strcmp("--version", argv[i]))
+            {
+                args->show_version = 1;
+            }
+            else if (!strcmp("-o", argv[i]))
+            {
+                if (i+1 < argc)
+                {
+                    i++;
+                    if (!strcmp("--", argv[i])) 
+                    {
+                        fprintf(stderr, PROGNAME": Missing directory argument to -o\n");
+                        args->show_help = 1;
+                    }
+                    else
+                    {
+                        args->outdir = argv[i];
+                    }
+                }
+                else
+                {
+                    args->show_help = 1;
+                }
+            }
+            else if (!strcmp("--test-only", argv[i]))
+            {
+                args->test_only = 1;
+            }
+            else if (!strcmp("--", argv[i])) 
+            {
                 i++;
-            break;
+                break;
+            }
+            else
+            {
+                //fprintf(stder, PROGNAME": Unrecognized argument %s. Use -- to signal end of arguments to %s.\n", argv[i], PROGNAME);
+                args->show_help = 1;
+            }
         }
     }
+
+    if (args->show_help) return;
 
     args->child_argc = argc - i;
     /* one extra for terminating NULL needed by execvp */
@@ -463,7 +477,7 @@ void write_records(FILE *fp, int n, record_t *records, int with_header)
 //
 // child_pid - The PID from fork
 //
-// This function currently doesn't use the child PID. It more generally
+// OLD: This function currently doesn't use the child PID. It more generally
 // determines whether all child (and possibly grandchild) processes have
 // finished.
 //
@@ -472,7 +486,8 @@ void write_records(FILE *fp, int n, record_t *records, int with_header)
 int child_finished(pid_t child_pid)
 {
     int status;
-    pid_t pid = waitpid(-1, &status, WNOHANG);
+    pid_t pid = waitpid(child_pid, &status, WNOHANG);
+    //pid_t pid = waitpid(-1, &status, WNOHANG);
 
     if (pid == -1)
     {
@@ -524,7 +539,7 @@ void help()
         "\n"
         "   -h | --help         Display this help message.\n"
         "   --version           Show version information.\n"
-        "   -o <directory>      Create directory and write results there.\n"
+        "   -o <directory>      Create given directory and write results there.\n"
         "\n"
         PROGNAME" depends on the NVIDIA DCGM library. When running in a\n"
         "container at CSCS you will need the Container Engine annotation in\n"
@@ -600,6 +615,19 @@ int mkdir_p(const char *path, mode_t mode)
     return 0;
 }
 
+void warnfs(char *msg, __fsword_t fstype)
+{
+    switch (fstype)
+    {
+        case 0x65735546: /* FUSE_SUPER_MAGIC */
+            fprintf(stderr, PROGNAME": %s may be inside a container. Any data recorded there will be lost.\n", msg);
+            fprintf(stderr, PROGNAME": Bind-mount an external path and save data there.\n");
+            break;
+        default:
+            break;
+    }
+}
+
 // ==========================================================================
 // create_output_location - Create the appropriate path and output file
 //
@@ -621,7 +649,28 @@ int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdarg
     char *fname;
     char *metafname;
 
+    char *cwd = (char *)malloc(PATH_MAX * sizeof(*cwd));  // PATH_MAX is the maximum path length
+    if (getcwd(cwd, PATH_MAX) != NULL) 
+    {
+        if (V >= 2) fprintf(stderr, PROGNAME": Current directory %s.\n", cwd);
+    }
+    if (cwd) free(cwd);
+
     if (V >= 2) fprintf(stderr, PROGNAME": Creating output locations.\n");
+
+    if (args->outdir)
+    {
+        struct statfs buf;
+        statfs(args->outdir, &buf);
+        warnfs(args->outdir, buf.f_type);
+    }
+    else
+    {
+        struct statfs buf;
+        statfs(".", &buf);
+        warnfs("The current directory", buf.f_type);
+    }
+
 
     if (args->outdir)
     {
@@ -657,6 +706,7 @@ int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdarg
         goto cleanup;
     }
 
+    if (V >= 2) fprintf(stderr, PROGNAME": Making csv file %s.\n", fname);
     *csvfp = fopen(fname, "wt");
 
     if (!*csvfp)
@@ -668,6 +718,7 @@ int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdarg
 
     if (metafp != NULL)
     {
+        if (V >= 2) fprintf(stderr, PROGNAME": Making meta file %s.\n", metafname);
         *metafp = fopen(metafname, "wt");
         if (!*metafp)
         {
@@ -815,6 +866,7 @@ int main(int argc, char **argv)
     if (child_pid == 0) 
     {
         // Child process
+        if (V >= 2) fprintf(stderr, PROGNAME": Starting %s.\n", args.child_argv[0]);
         execvp(args.child_argv[0], args.child_argv);
         // If execvp returns, there was an error
         if (jobenv.rank0) perror("Failed to execute the command. Is it in the path?");
