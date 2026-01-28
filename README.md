@@ -13,12 +13,12 @@ To create the gssr-record executable run
 make
 ```
 
+# Quick Start Example
 A simple example to test the setup is to record a few seconds of no activity.
 ```bash
 ./gssr-record -o gr-sleep-test sleep 30
 ./gssr-analyze.py gr-sleep-test -o gr-sleep-test-report.pdf
 ```
-
 
 # Recording Metrics
 ```bash
@@ -53,15 +53,6 @@ options:
                         Output PDF filename (default: gssr-report.pdf)
 ```
 
-# Quick Start Example
-A simple example to test the setup is to record a few seconds of no activity.
-```bash
-./gssr-record -o gr-sleep-test sleep 30
-./gssr-analyze.py gr-sleep-test -o gr-sleep-test-report.pdf
-```
-
-
 # Notes
 - Only one rank per node will record metrics for all local GPUs
 - Overlapping slurm jobs will record the same data for the same GPUs
->>>>>>> 6dec456 (Add Notes section to README.)
