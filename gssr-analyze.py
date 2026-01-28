@@ -484,7 +484,7 @@ def title_page_table(ax, metadf):
         [ 'Node Count',             '%s (of %s)' % (m.get('step_nnodes',  'missing'), m.get('nnodes',  'unknown'))  ],
         [ 'Task Count',             '%s (of %s)' % (m.get('step_ntasks',  'missing'), m.get('ntasks',  'unknown'))  ],
         [ 'GPU Count',              m.get('unique gpus',  'missing')  ],
-        [ 'GPU Energy Use',         ('%.2g Wh' % energy) if energy > 0 else 'missing'  ],
+        [ 'GPU Energy Use',         ('%.2f Wh' % energy) if energy > 0 else 'missing'  ],
         [ 'Executable',             m.get('executable',   'missing')  ],
         [ 'Arguments',              m.get('arguments',    'missing')  ],
     ]
@@ -493,7 +493,7 @@ def title_page_table(ax, metadf):
     for row in table_data:
         label, val = row
         val_str = str(val)
-        wrapped_val = textwrap.wrap(val_str, width=wrap_width, max_lines=20)
+        wrapped_val = textwrap.wrap(val_str, width=wrap_width, max_lines=15)
         row[1] = '\n'.join(wrapped_val)
         row_line_counts.append(len(wrapped_val))
 
@@ -503,7 +503,7 @@ def title_page_table(ax, metadf):
         #colLabels=['Field', 'Value'],
         cellLoc='left',
         loc='top',
-        bbox = (0,0,1,0.5),
+        bbox = (0,0,1,0.55),
         colWidths = [0.3, 0.7]
     )
 
@@ -633,18 +633,18 @@ def definitions_page(pdf):
         [ 'GPU Memory (MB) Used/Free/Reserved',
              'Used/Free/Reserved Frame Buffer of the GPU in MB' ],
         [ 'GPU Utilization (%)',
-             'The fraction of time any portion of the graphics or compute engines' +
-             'were active. The graphics engine is active if a graphics/compute' +
-             'context is bound and the graphics/compute pipe is busy. The value' +
-             'represents an average over a time interval and is not an instantaneous' +
-             'value.'],
+             ('The fraction of time any portion of the graphics or compute engines'
+             ' were active. The graphics engine is active if a graphics/compute'
+             ' context is bound and the graphics/compute pipe is busy. The value'
+             ' represents an average over a time interval and is not an instantaneous'
+             ' value.')],
         [ 'SM Active (%)',
              'The fraction of time at least one warp was active on a' +
-             'multiprocessor, averaged over all multiprocessors. Note that "active"' +
-             'does not necessarily mean a warp is actively computing.' +
-             'Warps waiting on memory requests are considered active. The value' +
-             'represents an average over a time interval and is not an instantaneous' +
-             'value. '],
+             ' multiprocessor, averaged over all multiprocessors. Note that "active"' +
+             ' does not necessarily mean a warp is actively computing.' +
+             ' Warps waiting on memory requests are considered active. The value' +
+             ' represents an average over a time interval and is not an instantaneous' +
+             ' value. '],
         [ 'SM Occupancy (%)',
              'The fraction of resident warps on a multiprocessor, relative to the' +
              'maximum number of concurrent warps supported on a multiprocessor. The' +
@@ -865,21 +865,29 @@ def heatmaps(pdf, df):
             columns='timestamp',       # columns = time
             values=metric              # values to populate the matrix
         )
-        x = xy.columns
-        y = range(len(xy.index))
+        #x = xy.columns
+        x = range(len(xy.columns)+1)
+        y = range(len(xy.index)+1)
         vals = xy.fillna(0.0).to_numpy() * scale
+
+        #x = x[700:801]
+        #vals = vals[:,700:800]
     
 
-        clrs = copy.copy(cmap_func(cmap))
+        clrs = copy.copy(cmap_func('viridis'))
+        #clrs = copy.copy(cmap_func('plasma'))
+        #clrs = copy.copy(cmap_func(cmap))
         clrs.set_under('white')
+        clrs.set_over('red')
 
         im = ax1.pcolormesh(
             x,
             y,
             vals,
-            shading="nearest",
+            shading="flat",
             vmin=1, vmax=100, cmap=clrs,
             rasterized=True,
+            snap=True,
         )
 
         cbar = pl.colorbar(im, ax=ax1, extend='both')
