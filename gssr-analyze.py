@@ -24,14 +24,14 @@ import copy
 import glob
 import re
 
-import numpy as np
 import pandas as pd
+import numpy as np
 import matplotlib as mpl
-from matplotlib import cm
 import matplotlib.pyplot as pl
+
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import MaxNLocator
-
+from matplotlib import cm
 
 # Random Number Generator used to add a little noise to the histrogram
 # to increase legibility when bars overlap.
@@ -125,7 +125,23 @@ def load_metrics_and_meta(paths):
 
     return df, metadf
 
-def plot_memory_metrics(ax, df):
+def mk_histogram(ys, n_bins, data_range):
+
+    if not len(ys):
+        bins = np.linspace(data_range[0], data_range[1], n_bins)
+        y = np.zeros(len(bins)-1)
+    else:
+        y,bins = np.histogram(ys, bins=n_bins, range=data_range)
+        y = y * (100. / len(ys))
+
+    return y,bins
+
+def add_frosting(ax, xs):
+    if len(xs):
+        ax.axvspan(xs[0], xs[-1], ymin=0, ymax=1, color='w', zorder=100, alpha=0.70, ec='lightgrey', lw=1, hatch='///',)
+    for spine in ax.spines.values(): spine.set_zorder(1000)
+
+def plot_memory_metrics(ax, df, metadf):
     """
     Plot the GPU memory usage metrics.
 
@@ -143,32 +159,33 @@ def plot_memory_metrics(ax, df):
 
 
     cfg = [
-        ['DCGM_FI_DEV_FB_FREE_avg',     1e-3, 'g',        'Free'], 
-        ['DCGM_FI_DEV_FB_USED_avg',     1e-3, 'r',        'Used'],
-        ['DCGM_FI_DEV_FB_RESERVED_avg', 1e-3, 'orange',   'Reserved']]
+        ['DCGM_FI_DEV_FB_FREE_avg',     1e-3, 'g',        'Free', 'limegreen'], 
+        ['DCGM_FI_DEV_FB_USED_avg',     1e-3, 'r',        'Used', 'indianred'],
+        ['DCGM_FI_DEV_FB_RESERVED_avg', 1e-3, 'orange',   'Reserved', 'moccasin']]
 
     x = df['timestamp']
 
-    for metric,scale,c,_ in cfg:
-        y_avg = df[metric,'mean'] * scale
-        min_y = df[metric,'min'] * scale
-        max_y = df[metric,'max'] * scale
-    
-        #figpath = self.plot_time_series(t, y_avg, min_y, max_y, metric)
+    first_50util = metadf['GPU_UTIL_time_first50'].item()
+    add_frosting(ax[0], x.iloc[0:first_50util].to_numpy())
 
-        # Downsample data to a maximum of 100 points
-        #x, y_avg, min_y, max_y = self.downsample((x, y_avg, min_y, max_y))
-        
-        # Add the shaded area between min_y and max_y
-        #ax1.fill_between(x, min_y, max_y, color='lightblue', alpha=0.5, label='Range')
+    for metric,scale,c,_,fillc in cfg:
+        #y_avg = df[metric,'mean'] * scale
+        #min_y = df[metric,'min'] * scale
+        #max_y = df[metric,'max'] * scale
+
+        y_avg = df[metric,'q50'] * scale
+        min_y = df[metric,'q10'] * scale
+        max_y = df[metric,'q90'] * scale
+    
+        ax[0].fill_between(x, min_y, max_y, color=fillc, alpha=0.5, lw=1, ec='none')
         
         # Plot the actual y line over the shaded area
         ax[0].plot(x, y_avg, label=metric, color=c, linewidth=1.0)
         ax[0].set_xlabel('Time (s)')
         ax[0].set_ylabel(f'GPU Memory Usage (GB)', labelpad=10)
 
-        n_bins = 20 
-        y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=(0,100))
+        y,bins = mk_histogram(y_avg[first_50util:], 20, (0,100))
+
         if np.amax(y) < 20:
             xeps, yeps = 0,0
         else:
@@ -183,11 +200,11 @@ def plot_memory_metrics(ax, df):
     ax[1].set_xlim(-5, 105)
     ax[1].set_ylim(ax[0].get_ylim())
 
-    legend = [ [legend_text,   pl.Line2D([0], [0], lw=5, color=c)] for _,scale,c,legend_text in cfg ]
+    legend = [ [legend_text,   pl.Line2D([0], [0], lw=5, color=c)] for _,scale,c,legend_text,_ in cfg ]
     l,h = list(zip(*legend))
     ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
 
-def plot_txrx_metrics(ax, df):
+def plot_txrx_metrics(ax, df, metadf):
     """
     Plot the GPU data transmission metrics like PCIe and NVlink
 
@@ -204,29 +221,38 @@ def plot_txrx_metrics(ax, df):
     """
 
     cfg = [
-        ['DCGM_FI_PROF_PCIE_TX_BYTES_avg',      1e-6, 'limegreen',        'PCIe Send'], 
-        ['DCGM_FI_PROF_PCIE_RX_BYTES_avg',      1e-6, 'darkgreen',        'PCIe Recv'],
-        ['DCGM_FI_PROF_NVLINK_TX_BYTES_avg',    1e-6, 'b',        'NVLink Send'],
-        ['DCGM_FI_PROF_NVLINK_RX_BYTES_avg',    1e-6, 'darkblue',   'NVLink Recv'],
-        ['DCGM_FI_PROF_C2C_TX_ALL_BYTES',       1e-6, 'orange',        'C2C Send'],
-        ['DCGM_FI_PROF_C2C_RX_ALL_BYTES',       1e-6, 'darkorange',   'C2C Recv']]
+        ['DCGM_FI_PROF_PCIE_TX_BYTES_avg',      1e-6, 'limegreen',  'PCIe Send', 'palegreen'], 
+        ['DCGM_FI_PROF_PCIE_RX_BYTES_avg',      1e-6, 'darkgreen',  'PCIe Recv', 'seagreen'],
+        ['DCGM_FI_PROF_NVLINK_TX_BYTES_avg',    1e-6, 'b',          'NVLink Send', 'cornflowerblue'],
+        ['DCGM_FI_PROF_NVLINK_RX_BYTES_avg',    1e-6, 'darkblue',   'NVLink Recv', 'royalblue'],
+        ['DCGM_FI_PROF_C2C_TX_ALL_BYTES',       1e-6, 'orange',     'C2C Send', 'moccasin'],
+        ['DCGM_FI_PROF_C2C_RX_ALL_BYTES',       1e-6, 'darkorange', 'C2C Recv', 'bisque']
+        ]
     cfg = [c for c in cfg if c[0] in df.columns]
 
     x = df['timestamp']
 
     data_range = [np.inf, -np.inf]
-    for metric,scale,c,_ in cfg:
-        y_avg = df[metric,'mean'] * scale
+    for metric,scale,c,_,fillc in cfg:
+        #y_avg = df[metric,'mean'] * scale
+        y_avg = df[metric,'q50'] * scale
+        min_y = df[metric,'q10'] * scale
+        max_y = df[metric,'q90'] * scale
     
+        ax[0].fill_between(x, min_y, max_y, color=fillc, alpha=0.5, lw=1, ec='none')
+
         # Plot the actual y line over the shaded area
         ax[0].plot(x, y_avg, color=c, linewidth=1.0)
         data_range = [min(data_range[0], np.amin(y_avg)), max(data_range[1], np.amax(y_avg))]
 
-    for metric,scale,c,_ in cfg:
+    first_50util = metadf['GPU_UTIL_time_first50'].item()
+    add_frosting(ax[0], x.iloc[0:first_50util].to_numpy())
+
+    for metric,scale,c,_,_ in cfg:
         y_avg = df[metric,'mean'] * scale
 
-        n_bins = 20 
-        y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=data_range)
+        y,bins = mk_histogram(y_avg[first_50util:], 20, data_range)
+
         if np.amax(y) < 20:
             xeps, yeps = 0,0
         else:
@@ -245,11 +271,11 @@ def plot_txrx_metrics(ax, df):
     ax[1].set_xlim(-5, 105)
     ax[1].set_ylim(ax[0].get_ylim())
     
-    legend = [ [legend_text,   pl.Line2D([0], [0], lw=5, color=c)] for _,_,c,legend_text in cfg ]
+    legend = [ [legend_text,   pl.Line2D([0], [0], lw=5, color=c)] for _,_,c,legend_text,_ in cfg ]
     l,h = list(zip(*legend))
     ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
 
-def plot_active_metrics(ax, df):
+def plot_active_metrics(ax, df, metadf):
     """
     Plot the GPU utilization and Tensor/FP metrics.
 
@@ -266,34 +292,34 @@ def plot_active_metrics(ax, df):
     """
 
     cfg = [
-        ['DCGM_FI_DEV_GPU_UTIL_avg',              1, 'k', 'GPU Util'], 
-        ['DCGM_FI_PROF_PIPE_TENSOR_ACTIVE_avg', 100, 'm', 'Tensor'], 
-        ['DCGM_FI_PROF_PIPE_FP64_ACTIVE_avg',   100, 'r', 'fp64'],
-        ['DCGM_FI_PROF_PIPE_FP32_ACTIVE_avg',   100, 'g', 'fp32'],
-        ['DCGM_FI_PROF_PIPE_FP16_ACTIVE_avg',   100, 'b', 'fp16'],
-        ['DCGM_FI_PROF_DRAM_ACTIVE_avg',        100, 'orange', 'DRAM']
+        ['DCGM_FI_DEV_GPU_UTIL_avg',              1, 'k', 'GPU Util', 'grey'], 
+        ['DCGM_FI_PROF_PIPE_TENSOR_ACTIVE_avg', 100, 'm', 'Tensor', 'violet'], 
+        ['DCGM_FI_PROF_PIPE_FP64_ACTIVE_avg',   100, 'r', 'fp64', 'indianred'],
+        ['DCGM_FI_PROF_PIPE_FP32_ACTIVE_avg',   100, 'g', 'fp32', 'limegreen'],
+        ['DCGM_FI_PROF_PIPE_FP16_ACTIVE_avg',   100, 'b', 'fp16', 'royalblue'],
+        ['DCGM_FI_PROF_DRAM_ACTIVE_avg',        100, 'orange', 'DRAM', 'moccasin']
         ]
 
     x = df['timestamp']
 
-    for metric,scale,c,_ in cfg:
-        y_avg = df[metric,'mean'] * scale
-        min_y = df[metric,'min'] * scale
-        max_y = df[metric,'max'] * scale
+    first_50util = metadf['GPU_UTIL_time_first50'].item()
+    add_frosting(ax[0], x.iloc[0:first_50util].to_numpy())
 
-        # Downsample data to a maximum of 100 points
-        #x, y_avg, min_y, max_y = self.downsample((x, y_avg, min_y, max_y))
-        
-        
-        # Add the shaded area between min_y and max_y
-        #ax1.fill_between(x, min_y, max_y, color='lightblue', alpha=0.5, label='Range')
-        
+
+    for metric,scale,c,_,fillc in cfg:
+        #y_avg = df[metric,'mean'] * scale
+        #min_y = df[metric,'min'] * scale
+        #max_y = df[metric,'max'] * scale
+        y_avg = df[metric,'q50'] * scale
+        min_y = df[metric,'q10'] * scale
+        max_y = df[metric,'q90'] * scale
+
+        ax[0].fill_between(x, min_y, max_y, color=fillc, alpha=0.5, lw=1, ec='none')
+
         # Plot the actual y line over the shaded area
         ax[0].plot(x, y_avg, label=metric, color=c, linewidth=1.0)
 
-        # Create the distribution plot (right)
-        n_bins = 20 #min(100, max(10, int(np.ceil(np.sqrt(len(y_avg))))))
-        y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=(0,100))
+        y,bins = mk_histogram(y_avg[first_50util:], 20, (0,100))
 
         if np.amax(y) < 20:
             xeps, yeps = 0,0
@@ -314,11 +340,11 @@ def plot_active_metrics(ax, df):
     ax[1].set_ylim(ax[0].get_ylim())
     
 
-    legend = [ [legend_text,   pl.Line2D([0], [0], lw=5, color=c)] for _,_,c,legend_text in cfg ]
+    legend = [ [legend_text,   pl.Line2D([0], [0], lw=5, color=c)] for _,_,c,legend_text,_ in cfg ]
     l,h = list(zip(*legend))
     ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
 
-def plot_energy_metrics(ax, df):
+def plot_energy_metrics(ax, df, metadf):
     """
     Plot the GPU energy and power usage.
 
@@ -335,21 +361,26 @@ def plot_energy_metrics(ax, df):
     """
 
     cfg = [
-        ['DCGM_FI_DEV_POWER_USAGE_avg',                 1, 'red', 'GPU Power']
+        ['DCGM_FI_DEV_POWER_USAGE_avg', 1, 'red', 'GPU Power', 'indianred']
         ]
 
     x = df['timestamp']
 
-    metric,scale,c,_ = cfg[0]
-    y_avg = df[metric,'mean'] * scale
+    metric,scale,c,_,fillc = cfg[0]
+    #y_avg = df[metric,'mean'] * scale
+    y_avg = df[metric,'q50'] * scale
+    min_y = df[metric,'q10'] * scale
+    max_y = df[metric,'q90'] * scale
 
+    ax[0].fill_between(x, min_y, max_y, color=fillc, alpha=0.5, lw=1, ec='none')
     ax[0].plot(x, y_avg, label=metric, color=c, linewidth=1.0)
     data_range = [np.amin(y_avg), np.amax(y_avg)]
 
+    first_50util = metadf['GPU_UTIL_time_first50'].item()
+    add_frosting(ax[0], x.iloc[0:first_50util].to_numpy())
 
     # Create the distribution plot (right)
-    n_bins = 20 #min(100, max(10, int(np.ceil(np.sqrt(len(y_avg))))))
-    y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=data_range)
+    y,bins = mk_histogram(y_avg[first_50util:], 20, data_range)
 
     if np.amax(y) < 20:
         xeps, yeps = 0,0
@@ -370,12 +401,12 @@ def plot_energy_metrics(ax, df):
     ax[1].set_xlim(-5, 105)
     ax[1].set_ylim(ax[0].get_ylim())
 
-    legend = [ [legend_text,   pl.Line2D([0], [0], lw=5, color=c)] for _,_,c,legend_text in cfg ]
+    legend = [ [legend_text,   pl.Line2D([0], [0], lw=5, color=c)] for _,_,c,legend_text,_ in cfg ]
     l,h = list(zip(*legend))
     ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
 
 
-def plot_sm_metrics(ax, df):
+def plot_sm_metrics(ax, df, metadf):
     """
     Plot the GPU SM active and occupancy metrics.
 
@@ -391,35 +422,36 @@ def plot_sm_metrics(ax, df):
     None
     """
 
-    cfg = [
-        ['DCGM_FI_PROF_SM_ACTIVE_avg',      100, 'g', 'SM Active'], 
-        ['DCGM_FI_PROF_SM_OCCUPANCY_avg',   100, 'r', 'SM Occupancy']]
+    cfgs = [
+        ['DCGM_FI_PROF_SM_ACTIVE_avg',      100, 'green', 'SM Active', 'limegreen'], 
+        ['DCGM_FI_PROF_SM_OCCUPANCY_avg',   100, 'red', 'SM Occupancy', 'indianred']]
 
     x = df['timestamp']
 
-    for metric,scale, c,_ in cfg:
-        y_avg = df[metric,'mean'] * scale
-        min_y = df[metric,'min'] * scale
-        max_y = df[metric,'mean'] * scale
-    
-#       if isMetricRatio(metric) :
-#           y_avg = y_avg*100
-#           min_y = min_y*100
-#           max_y = max_y*100
+    first_50util = metadf['GPU_UTIL_time_first50'].item()
+    add_frosting(ax[0], x.iloc[0:first_50util].to_numpy())
 
-        # Downsample data to a maximum of 100 points
-        #x, y_avg, min_y, max_y = self.downsample((x, y_avg, min_y, max_y))
-        
+    for cfg in cfgs:
+        metric,scale,c = cfg[:3]
+        fillc = cfg[4]
+
+        #y_avg = df[metric,'mean'] * scale
+        #min_y = df[metric,'min'] * scale
+        #max_y = df[metric,'mean'] * scale
+
+        y_avg = df[metric,'q50'] * scale
+        min_y = df[metric,'q10'] * scale
+        max_y = df[metric,'q90'] * scale
+    
         # Add the shaded area between min_y and max_y
-        #ax1.fill_between(x, min_y, max_y, color='lightblue', alpha=0.5, label='Range')
+        ax[0].fill_between(x, min_y, max_y, color=fillc, alpha=0.5, lw=1, ec='none')
         
         # Plot the actual y line over the shaded area
         ax[0].plot(x, y_avg, label=metric, color=c, linewidth=1.0)
         #ax1.grid(alpha=0.8)
 
         # Create the distribution plot (right)
-        n_bins = 20 
-        y,bins = np.histogram(y_avg, weights=np.full_like(y_avg, 1./len(y_avg)) * 100, bins=n_bins, range=(0,100))
+        y,bins = mk_histogram(y_avg[first_50util:], 20, (0,100))
         yeps = rng.integers(low=0, high=2, size=len(y))
         yeps[y <= 0] = 0
         xeps = rng.integers(low=0, high=2, size=len(y))
@@ -436,7 +468,7 @@ def plot_sm_metrics(ax, df):
     ax[1].set_ylim(ax[0].get_ylim())
 
     
-    legend = [ [legend_text,   pl.Line2D([0], [0], lw=5, color=c)] for _,_,c,legend_text in cfg ]
+    legend = [ [cfg[3],   pl.Line2D([0], [0], lw=5, color=cfg[2])] for cfg in cfgs ]
     l,h = list(zip(*legend))
     ax[0].legend(h,l, ncol=len(legend), loc='lower left', borderpad=0, **dict(frameon=False, bbox_to_anchor=(0.0, 1.0), fontsize=6))
 
@@ -724,7 +756,7 @@ def definitions_page(pdf):
     pdf.savefig(fig)
     pl.close(fig)
 
-def plots(pdf, df):
+def plots(pdf, df, metadf):
     """
     Draw all the time-series plots of summarized GPU metrics.
 
@@ -772,32 +804,51 @@ def plots(pdf, df):
         #fontweight='bold'
     )
 
-    plot_active_metrics(axes[1,:], df)
-    plot_sm_metrics(axes[2,:], df)
-    plot_memory_metrics(axes[0,:], df)
-    plot_txrx_metrics(axes[3,:], df)
-    plot_energy_metrics(axes[4,:], df)
+    plot_active_metrics(axes[1,:], df, metadf)
+    plot_sm_metrics(axes[2,:], df, metadf)
+    plot_memory_metrics(axes[0,:], df, metadf)
+    plot_txrx_metrics(axes[3,:], df, metadf)
+    plot_energy_metrics(axes[4,:], df, metadf)
 
     pdf.savefig(fig)
     pl.close(fig)
 
-def tables(pdf, df):
+def tables(pdf, df, metadf):
     pass
 
-def reduced_df(df):
+def reduced_df(df, metadf):
     """ 
     Reduce a DataFrame over timestamp, find min/max/avg of columns ending in _avg
     """
 
     cols_to_aggregate = [col for col in df.columns if col.endswith('_avg')]
 
-    agg_df = df.groupby('timestamp')[cols_to_aggregate].agg(['min', 'max', 'mean', 'sum'])
+    g = df.groupby('timestamp')[cols_to_aggregate]
+
+    stats = g.agg(['min', 'max', 'mean', 'sum'])
+    qs = g.quantile([0.1, 0.5, 0.9])
+
+    qs = qs.unstack(level=-1)              # quantiles → columns
+    qs.columns.names = ['metric', 'stat'] # rename levels
+
+    # rename 0.1 → q10 etc
+    qs = qs.rename(columns=lambda q: f'q{int(q*100)}', level='stat')
+
+    agg_df = stats.join(qs).sort_index(axis=1)
     agg_df.reset_index(inplace=True)
+
     #agg_df['DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION_avg', 'cumsum'] = agg_df['DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION_avg', 'sum'].cumsum()
+
+    vals = agg_df['DCGM_FI_DEV_GPU_UTIL_avg']['min']
+    first_50util = next(
+        (i for i, v in enumerate(vals) if v > 50),
+        len(vals)
+    )
+    metadf['GPU_UTIL_time_first50'] = first_50util
 
     return agg_df
 
-def heatmaps(pdf, df):
+def heatmaps(pdf, df, metadf):
     """
     Draw a page of heatmaps for the Tensor and FP metrics
 
@@ -860,6 +911,7 @@ def heatmaps(pdf, df):
 
     for i,[metric,scale,c,label,cmap] in enumerate(cfg):
         ax1 = axes[i,0]
+
         xy = df.pivot(
             index=['proc', 'gpuId'],   # unique GPU identifier
             columns='timestamp',       # columns = time
@@ -889,6 +941,9 @@ def heatmaps(pdf, df):
             rasterized=True,
             snap=True,
         )
+
+        first_50util = metadf['GPU_UTIL_time_first50'].item()
+        add_frosting(ax1, x[0:first_50util])
 
         cbar = pl.colorbar(im, ax=ax1, extend='both')
 
@@ -1042,13 +1097,13 @@ def one_report(pdf, metadf, df):
         title_page(pdf, None, metadf)
         return
 
-    rdf = reduced_df(df)
+    rdf = reduced_df(df, metadf)
 
     title_page(pdf, df, metadf)
     evaluation(pdf, df, metadf)
-    plots(pdf, rdf)
-    heatmaps(pdf, df)
-    tables(pdf, rdf)
+    plots(pdf, rdf, metadf)
+    heatmaps(pdf, df, metadf)
+    tables(pdf, rdf, metadf)
 
 def report(paths, pdfname):
     """
