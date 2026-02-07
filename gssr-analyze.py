@@ -993,83 +993,156 @@ def evaluation(pdf, df, metadf):
     col1_width = 45
 
     colors = dict(
-            good = 'g',
-            acceptable = 'b',
-            improve = 'orange',
-            poor = 'r'
+            good        = 'mediumseagreen',
+            acceptable  = 'royalblue',
+            improve     = 'orange',
+            poor        = 'r',
+            Unknown     = 'grey'
             )
 
-    cfg = [
-        [df['DCGM_FI_DEV_GPU_UTIL_avg'].mean(), '%.2f',
-            [[ 25, 'poor',        'The global average GPU utilization is poor and below acceptable use of node resources.'],
-             [ 50, 'improve',     'The global average GPU utilization is below acceptable limits.'],
-             [ 75, 'acceptable',  'The global average GPU utilization could be improved.'],
-             [100, 'good',        'The global average GPU utilization is a good use of node resources.'],
-            ]
-        ],
-
-        [df[['DCGM_FI_PROF_PIPE_TENSOR_ACTIVE_avg',
-            'DCGM_FI_PROF_PIPE_FP64_ACTIVE_avg',
-            'DCGM_FI_PROF_PIPE_FP32_ACTIVE_avg',
-            'DCGM_FI_PROF_PIPE_FP16_ACTIVE_avg']].sum(axis=1).mean(), '%.2f',
-            [[1/16., 'poor',        'The global average FP utilization is poor and below acceptable use of node resources.'],
-             [1/8. , 'improve',     'The global average FP utilization is below acceptable limits.'],
-             [1/4. , 'acceptable',  'The global average FP utilization could be improved.'],
-             [4    , 'good',        'The global average FP utilization is a good use of node resources.'],
-            ] 
+    def start_eval(val):
+        crit = [
+            [ 0,   'poor',        'The GPU was not used during the measurement.'],
+            [ 25,  'improve',     'The GPU usage began late during the measurement. Results may not be representative of real usage.'],
+            [ 50,  'acceptable',  'The GPU usage began early on during the measurement.'],
+            [ 100, 'good',        'The GPU usage began very early on during the measurement.'],
         ]
-    ]
-
-    table_colors = []
-    table_data = []
-    for c in cfg:
-        val, fmt, limits = c
-        for [lim, rating, msg] in limits:
+        if val is None: return crit
+        for [lim, rating, msg] in crit:
             if val <= lim:
-                table_data.append(['', fmt % val, msg])
-                table_colors.append(colors[rating])
-                break
+                return '%.2f %%' % val, rating, msg
+        return '??', 'Unknown', 'Rating could not be determined from the value.'
 
-    row_line_counts = []  # to store number of lines per row
-    for row in table_data:
-        _, label, msg = row
-        col0 = textwrap.wrap(str(label), width=col0_width, max_lines=20)
-        col1 = textwrap.wrap(str(msg),   width=col1_width, max_lines=20)
+    def util_eval(val):
+        crit = [
+            [ 25, 'poor',        'The global average GPU utilization is poor and below acceptable use of node resources.'],
+            [ 50, 'improve',     'The global average GPU utilization is below acceptable limits.'],
+            [ 75, 'acceptable',  'The global average GPU utilization could be improved.'],
+            [100, 'good',        'The global average GPU utilization is a good use of node resources.'],
+        ]
+        if val is None: return crit
+        for [lim, rating, msg] in crit:
+            if val <= lim:
+                return '%.2f %%' % val, rating, msg
+        return '??', 'Unknown', 'Rating could not be determined from the value.'
 
-        row[1] = '\n'.join(col0)
-        row[2] = '\n'.join(col1)
+    def fp_eval(val):
+        crit = [
+            [1/16., 'poor',        'The global average FP utilization is poor and below acceptable use of node resources.'],
+            [1/8. , 'improve',     'The global average FP utilization is below acceptable limits.'],
+            [1/4. , 'acceptable',  'The global average FP utilization could be improved.'],
+            [4    , 'good',        'The global average FP utilization is a good use of node resources.'],
+        ]
+        if val is None: return crit
+        for [lim, rating, msg] in crit:
+            if val <= lim:
+                return '%.2f %%' % (val*100), rating, msg
+        return '??', 'Unknown', 'Rating could not be determined from the value.'
 
-        row_line_counts.append(max(len(col0),len(col1)))
+    def power_eval(val):
+        crit = [
+            [100, 'poor',        'The global average power draw is very low and could indicate low GPU usage.'],
+            [200, 'improve',     'The global average power draw is low and could indicate low GPU usage.'],
+            [500, 'acceptable',  'The global average power draw is reasonable and indicates good GPU activation.'],
+            [700, 'good',        'The global average power draw is high and indicates a high GPU activation.'],
+        ]
+        if val is None: return crit
+        for [lim, rating, msg] in crit:
+            if val <= lim:
+                return '%.2f W' % val, rating, msg
+        return '??', 'Unknown', 'Rating could not be determined from the value.'
 
-    # Create table
-    h = 0
-    for i, lines in enumerate(row_line_counts):  # header row = 1 line
-        h += 0.05 * lines
+    def add_table_headers(table,table2):
+        h = 2.0
+        font = dict(weight='bold', size=12)
+        l0 = table.add_cell(0, 0, text='Criteria',                width=1, height=h, loc='center', facecolor='w', fontproperties=font)
+        c0 = table.add_cell(0, 1, text='Total Runtime',                width=2, height=h, loc='center', facecolor='w', fontproperties=font)
+        c1 = table.add_cell(0, 2, text='After GPU Util > 50%', width=2, height=h, loc='center', facecolor='w', fontproperties=font)
 
-    table = ax.table(
-        cellText=table_data,
-        cellLoc='left',
-        loc='top',
-        bbox = (0,1-h,1,h),
-        colWidths = [0.1, 0.4, 0.7]
-    )
+        l0 = table2.add_cell(0, 0, text='', width=1, height=h, loc='center', facecolor='w', fontproperties=font)
+        c0 = table2.add_cell(0, 1, text='', width=2, height=h, loc='center', facecolor='w', fontproperties=font)
+        c1 = table2.add_cell(0, 2, text='', width=2, height=h, loc='center', facecolor='w', fontproperties=font)
+        l0.set_visible(False)
+        c0.set_visible(False)
+        c1.set_visible(False)
 
+    def add_double_entry(table, table2, label, row, evalfn, e1, e2):
+
+        msg0 = ''
+        msg1 = ''
+        clr0 = 'w'
+        clr1 = 'w'
+
+        if e1 is not None:
+            val, rating, msg0 = evalfn(e1)
+            msg0 = [f'{val} ({rating})', ''] + textwrap.wrap(str(msg0), width=35, max_lines=20)
+            msg0 = '\n'.join(msg0)
+            clr0 = colors[rating]
+
+        if e2 is None:
+            clr1 = clr0
+        else:
+            val, rating, msg1 = evalfn(e2)
+            msg1 = [f'{val} ({rating})', ''] + textwrap.wrap(str(msg1), width=35, max_lines=20)
+            msg1 = '\n'.join(msg1)
+            clr1 = colors[rating]
+
+        crit = evalfn(None)
+        msg2 = '\n'.join([ f'≤ {v} - {rating}' for v,rating,_ in crit ])
+
+        h = max(len(msg0),len(msg1),len(msg2)) * 0.05
+
+        font = dict(weight='normal', size=8)
+
+        c0 = table.add_cell(row, 1, text=msg0, width=2.0, height=h, loc='left', facecolor=clr0, fontproperties=font)
+        c0.get_text().set_color('white')
+
+        c1 = table.add_cell(row, 2, text=msg1, width=2.0, height=h, loc='left', facecolor=clr1, fontproperties=font)
+        c1.get_text().set_color('white')
+
+        font = dict(weight='bold', size=8)
+        x3 = table2.add_cell(2*row-1, 0, text=label, width=1.0, height=h/2, loc='left', facecolor='w',  fontproperties=font)
+        x3.visible_edges='RL'
+        x4 = table2.add_cell(2*row-1, 1, text='', width=2.0, height=h/2)
+        x5 = table2.add_cell(2*row-1, 2, text='', width=2.0, height=h/2)
+        x4.set_visible(False)
+        x5.set_visible(False)
+
+        font = dict(weight='normal', size=6)
+        x0 = table2.add_cell(2*row, 0, text=msg2,  width=1.0, height=h/2, loc='left', facecolor='w',  fontproperties=font)
+        x0.visible_edges='BRL'
+        x1 = table2.add_cell(2*row, 1, text='', width=2.0, height=h/2)
+        x2 = table2.add_cell(2*row, 2, text='', width=2.0, height=h/2)
+        x1.set_visible(False)
+        x2.set_visible(False)
+
+
+
+    table = mpl.table.Table(ax, bbox=(0,0.5,1,0.5))
     table.auto_set_font_size(False)
-    table.set_fontsize(10)
 
-    for i, lines in enumerate(row_line_counts):  # header row = 1 line
-        table[i, 0].set_height(0.01 * lines)
-        table[i, 1].set_height(0.01 * lines)
-        table[i, 2].set_height(0.01 * lines)
+    table2 = mpl.table.Table(ax, bbox=(0,0.5,1,0.5))
+    table2.auto_set_font_size(False)
 
-    # --- Apply alternating row colors ---
-    colors = ['#ffffff', '#dddddd']  # white and light grey
-    for i in range(0, len(row_line_counts)): 
-        color = table_colors[i]  # alternate colors
-        table[i, 0].set_facecolor(color)
-        color = colors[(i+1) % 2]  # alternate colors
-        table[i, 1].set_facecolor(color)
-        table[i, 2].set_facecolor(color)
+    first_50util = metadf['GPU_UTIL_time_first50'].item()
+
+    fp = df[['DCGM_FI_PROF_PIPE_TENSOR_ACTIVE_avg',
+             'DCGM_FI_PROF_PIPE_FP64_ACTIVE_avg',
+             'DCGM_FI_PROF_PIPE_FP32_ACTIVE_avg',
+             'DCGM_FI_PROF_PIPE_FP16_ACTIVE_avg']]
+    fp_avg = fp.sum(axis=1).mean()
+    fp50_avg = fp[first_50util:].sum(axis=1).mean()
+
+    add_table_headers(table, table2)
+
+    add_double_entry(table, table2, 'GPU Start', 1, start_eval, 100*(df['timestamp'].iloc[-1].item() - first_50util) / (df['timestamp'].iloc[-1].item() - df['timestamp'].iloc[0].item()), None)
+    add_double_entry(table, table2, 'GPU Util',  2, util_eval, df['DCGM_FI_DEV_GPU_UTIL_avg'].mean(), df['DCGM_FI_DEV_GPU_UTIL_avg'][first_50util:].mean())
+    add_double_entry(table, table2, 'FP Util',   3, fp_eval, fp_avg, fp50_avg)
+    add_double_entry(table, table2, 'Power',     4, power_eval, df['DCGM_FI_DEV_POWER_USAGE_avg'].mean(), df['DCGM_FI_DEV_POWER_USAGE_avg'][first_50util:].mean())
+
+    ax.add_table(table)
+    ax.add_table(table2)
+
 
     pdf.savefig(fig)
     pl.close(fig)
