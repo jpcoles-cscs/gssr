@@ -29,6 +29,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as pl
 
+from pathlib import Path
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import MaxNLocator
 from matplotlib import cm
@@ -57,6 +58,8 @@ def load_metrics_and_meta(paths):
     for path in paths:
 
         steps = glob.glob(os.path.join(path, 'step_*'))
+        if not steps:
+            steps = glob.glob(os.path.join(path, '*/step_*'))
 
         for step in steps:
 
@@ -69,19 +72,16 @@ def load_metrics_and_meta(paths):
 
             if len(meta_files) == 0:
                 print(f'Missing metadata file in {step}. Attempting to continue.')
-                metadf = dict()
+                metadf = dict(cluster=['nocluster'], jobid=['0'])
             else:
                 meta_file = meta_files[0]
-
-                m = re.search(r"step_(\d+)/proc_(\d+)\.meta\.txt$", meta_file)
-                istep, iproc = int(m.group(1)), int(m.group(2))
 
                 try:
                     with open(meta_file) as f:
                         metadf = json.load(f)
                 except json.decoder.JSONDecodeError as e:
                     print(f'Error reading {meta_file}. Attempting to continue. {e}')
-                    metadf = dict()
+                    metadf = dict(cluster=['nocluster'], jobid=['0'])
 
             m = re.search(r"step_(\d+)$", step)
             istep = int(m.group(1))
@@ -98,9 +98,11 @@ def load_metrics_and_meta(paths):
                     df = pd.read_csv(proc_file)
 
                     # Use filename (without extension) as label
-                    df['report'] = path
-                    df['step'] = istep
-                    df['proc'] = iproc
+                    df['report']  = path
+                    df['cluster'] = metadf['cluster']
+                    df['jobid']   = metadf['jobid']
+                    df['step']    = istep
+                    df['proc']    = iproc
 
                     # Count the number of unique GPUs this step monitored
                     ngpus  += df['gpuId'].nunique()
@@ -137,8 +139,7 @@ def mk_histogram(ys, n_bins, data_range):
     return y,bins
 
 def add_frosting(ax, xs):
-    if len(xs):
-        ax.axvspan(xs[0], xs[-1], ymin=0, ymax=1, color='w', zorder=100, alpha=0.70, ec='lightgrey', lw=1, hatch='///',)
+    ax.axvspan(0, xs, ymin=0, ymax=1, color='w', zorder=100, alpha=0.70, ec='lightgrey', lw=1, hatch='///',)
     for spine in ax.spines.values(): spine.set_zorder(1000)
 
 def plot_memory_metrics(ax, df, metadf):
@@ -166,14 +167,14 @@ def plot_memory_metrics(ax, df, metadf):
     x = df['timestamp']
 
     first_50util = metadf['GPU_UTIL_time_first50'].item()
-    add_frosting(ax[0], x.iloc[0:first_50util].to_numpy())
+    add_frosting(ax[0], first_50util)
 
     for metric,scale,c,_,fillc in cfg:
         #y_avg = df[metric,'mean'] * scale
         #min_y = df[metric,'min'] * scale
         #max_y = df[metric,'max'] * scale
 
-        y_avg = df[metric,'q50'] * scale
+        y_avg = df[metric,'mean'] * scale
         min_y = df[metric,'q10'] * scale
         max_y = df[metric,'q90'] * scale
     
@@ -235,7 +236,7 @@ def plot_txrx_metrics(ax, df, metadf):
     data_range = [np.inf, -np.inf]
     for metric,scale,c,_,fillc in cfg:
         #y_avg = df[metric,'mean'] * scale
-        y_avg = df[metric,'q50'] * scale
+        y_avg = df[metric,'mean'] * scale
         min_y = df[metric,'q10'] * scale
         max_y = df[metric,'q90'] * scale
     
@@ -246,7 +247,7 @@ def plot_txrx_metrics(ax, df, metadf):
         data_range = [min(data_range[0], np.amin(y_avg)), max(data_range[1], np.amax(y_avg))]
 
     first_50util = metadf['GPU_UTIL_time_first50'].item()
-    add_frosting(ax[0], x.iloc[0:first_50util].to_numpy())
+    add_frosting(ax[0], first_50util)
 
     for metric,scale,c,_,_ in cfg:
         y_avg = df[metric,'mean'] * scale
@@ -303,14 +304,14 @@ def plot_active_metrics(ax, df, metadf):
     x = df['timestamp']
 
     first_50util = metadf['GPU_UTIL_time_first50'].item()
-    add_frosting(ax[0], x.iloc[0:first_50util].to_numpy())
+    add_frosting(ax[0], first_50util)
 
 
     for metric,scale,c,_,fillc in cfg:
         #y_avg = df[metric,'mean'] * scale
         #min_y = df[metric,'min'] * scale
         #max_y = df[metric,'max'] * scale
-        y_avg = df[metric,'q50'] * scale
+        y_avg = df[metric,'mean'] * scale
         min_y = df[metric,'q10'] * scale
         max_y = df[metric,'q90'] * scale
 
@@ -368,7 +369,7 @@ def plot_energy_metrics(ax, df, metadf):
 
     metric,scale,c,_,fillc = cfg[0]
     #y_avg = df[metric,'mean'] * scale
-    y_avg = df[metric,'q50'] * scale
+    y_avg = df[metric,'mean'] * scale
     min_y = df[metric,'q10'] * scale
     max_y = df[metric,'q90'] * scale
 
@@ -377,7 +378,7 @@ def plot_energy_metrics(ax, df, metadf):
     data_range = [np.amin(y_avg), np.amax(y_avg)]
 
     first_50util = metadf['GPU_UTIL_time_first50'].item()
-    add_frosting(ax[0], x.iloc[0:first_50util].to_numpy())
+    add_frosting(ax[0], first_50util)
 
     # Create the distribution plot (right)
     y,bins = mk_histogram(y_avg[first_50util:], 20, data_range)
@@ -429,7 +430,7 @@ def plot_sm_metrics(ax, df, metadf):
     x = df['timestamp']
 
     first_50util = metadf['GPU_UTIL_time_first50'].item()
-    add_frosting(ax[0], x.iloc[0:first_50util].to_numpy())
+    add_frosting(ax[0], first_50util)
 
     for cfg in cfgs:
         metric,scale,c = cfg[:3]
@@ -439,7 +440,7 @@ def plot_sm_metrics(ax, df, metadf):
         #min_y = df[metric,'min'] * scale
         #max_y = df[metric,'mean'] * scale
 
-        y_avg = df[metric,'q50'] * scale
+        y_avg = df[metric,'mean'] * scale
         min_y = df[metric,'q10'] * scale
         max_y = df[metric,'q90'] * scale
     
@@ -804,9 +805,9 @@ def plots(pdf, df, metadf):
         #fontweight='bold'
     )
 
+    plot_memory_metrics(axes[0,:], df, metadf)
     plot_active_metrics(axes[1,:], df, metadf)
     plot_sm_metrics(axes[2,:], df, metadf)
-    plot_memory_metrics(axes[0,:], df, metadf)
     plot_txrx_metrics(axes[3,:], df, metadf)
     plot_energy_metrics(axes[4,:], df, metadf)
 
@@ -839,9 +840,9 @@ def reduced_df(df, metadf):
 
     #agg_df['DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION_avg', 'cumsum'] = agg_df['DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION_avg', 'sum'].cumsum()
 
-    vals = agg_df['DCGM_FI_DEV_GPU_UTIL_avg']['min']
+    vals = agg_df['DCGM_FI_DEV_GPU_UTIL_avg']['mean']
     first_50util = next(
-        (i for i, v in enumerate(vals) if v > 50),
+        (agg_df['timestamp'].iloc[i].item() for i, v in enumerate(vals) if v > 50),
         len(vals)
     )
     metadf['GPU_UTIL_time_first50'] = first_50util
@@ -917,14 +918,12 @@ def heatmaps(pdf, df, metadf):
             columns='timestamp',       # columns = time
             values=metric              # values to populate the matrix
         )
-        #x = xy.columns
+
+        xy = xy.reindex(columns=np.arange(df['timestamp'].max()))
+        vals = np.ma.masked_invalid(xy.to_numpy() * scale)
+
         x = range(len(xy.columns)+1)
         y = range(len(xy.index)+1)
-        vals = xy.fillna(0.0).to_numpy() * scale
-
-        #x = x[700:801]
-        #vals = vals[:,700:800]
-    
 
         clrs = copy.copy(cmap_func('viridis'))
         #clrs = copy.copy(cmap_func('plasma'))
@@ -943,7 +942,7 @@ def heatmaps(pdf, df, metadf):
         )
 
         first_50util = metadf['GPU_UTIL_time_first50'].item()
-        add_frosting(ax1, x[0:first_50util])
+        add_frosting(ax1, first_50util)
 
         cbar = pl.colorbar(im, ax=ax1, extend='both')
 
@@ -1202,12 +1201,16 @@ def report(paths, pdfname):
 
     with PdfPages(pdfname) as pdf:
 
-        for [group, gmdf] in metadf.groupby(['report', 'step']):
-            report,step = group
+        for [group, gmdf] in metadf.groupby(['report', 'cluster', 'jobid', 'step']):
+            report,cluster,jobid,step = group
             if df.empty:
                 gdf = None
             else:
-                gdf = df[(df["report"] == report) & (df["step"] == step)]
+                gdf = df[(df['report']  == report) 
+                       & (df['cluster'] == cluster)
+                       & (df['jobid']   == jobid)
+                       & (df['step']    == step)
+                         ]
                 gdf.reset_index(inplace=True, drop=True)
 
             one_report(pdf, gmdf, gdf)

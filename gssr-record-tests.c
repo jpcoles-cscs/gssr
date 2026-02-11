@@ -273,6 +273,7 @@ void test_create_output_location()
             .slurm_rank = "2",
             .slurm_localid = "0",
             .slurm_jobid = "4567",
+            .slurm_cluster = "mycluster",
             .slurm_jobname = "test",
             .rank0 = 0,
             .local0 = 1,
@@ -285,12 +286,12 @@ void test_create_output_location()
         assert(create_output_location(&fp, &metafp, &jobenv, &args));
         assert(!fclose(fp));
         struct stat st;
-        assert(!stat("report_4567/step_12", &st));
+        assert(!stat("gssr_report/mycluster_4567/step_12", &st));
         assert((st.st_mode & S_IRWXU) == S_IRWXU);
-        assert(!stat("report_4567/step_12/proc_2.csv", &st));
-        printf("Created report_4567/step_12/proc_2.csv.\n");
-        assert(!stat("report_4567/step_12/proc_2.meta.txt", &st));
-        printf("Created report_4567/step_12/proc_2.meta.txt.\n");
+        assert(!stat("gssr_report/mycluster_4567/step_12/proc_2.csv", &st));
+        printf("Created gssr_report/mycluster_4567/step_12/proc_2.csv.\n");
+        assert(!stat("gssr_report/mycluster_4567/step_12/proc_2.meta.txt", &st));
+        printf("Created gssr_report/mycluster_4567/step_12/proc_2.meta.txt.\n");
     }
 
     {
@@ -300,6 +301,7 @@ void test_create_output_location()
             .slurm_rank = "2",
             .slurm_localid = "0",
             .slurm_jobid = "4567",
+            .slurm_cluster = "mycluster",
             .slurm_jobname = "test",
             .rank0 = 0,
             .local0 = 1,
@@ -312,10 +314,10 @@ void test_create_output_location()
         assert(create_output_location(&fp, &metafp, &jobenv, &args));
         assert(!fclose(fp));
         struct stat st;
-        assert(!stat("report_4567/step_12/proc_2.csv", &st));
-        printf("Created report_4567/step_12/proc_2.csv.\n");
-        assert(!stat("report_4567/step_12/proc_2.meta.txt", &st));
-        printf("Created report_4567/step_12/proc_2.meta.txt.\n");
+        assert(!stat("gssr_report/mycluster_4567/step_12/proc_2.csv", &st));
+        printf("Created gssr_report/mycluster_4567/step_12/proc_2.csv.\n");
+        assert(!stat("gssr_report/mycluster_4567/step_12/proc_2.meta.txt", &st));
+        printf("Created gssr_report/mycluster_4567/step_12/proc_2.meta.txt.\n");
     }
 
     {
@@ -325,6 +327,7 @@ void test_create_output_location()
             .slurm_rank = "2",
             .slurm_localid = "0",
             .slurm_jobid = "4567",
+            .slurm_cluster = "mycluster",
             .slurm_jobname = "test",
             .rank0 = 0,
             .local0 = 1,
@@ -337,10 +340,10 @@ void test_create_output_location()
         assert(create_output_location(&fp, NULL, &jobenv, &args));
         assert(!fclose(fp));
         struct stat st;
-        assert(!stat("report_4567/step_12/proc_2.csv", &st));
-        printf("Created report_4567/step_12/proc_2.csv.\n");
-        assert(!stat("report_4567/step_12/proc_2.meta.txt", &st));
-        printf("Created report_4567/step_12/proc_2.meta.txt.\n");
+        assert(!stat("gssr_report/mycluster_4567/step_12/proc_2.csv", &st));
+        printf("Created gssr_report/mycluster_4567/step_12/proc_2.csv.\n");
+        assert(!stat("gssr_report/mycluster_4567/step_12/proc_2.meta.txt", &st));
+        printf("Created gssr_report/mycluster_4567/step_12/proc_2.meta.txt.\n");
     }
 }
 

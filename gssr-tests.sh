@@ -6,7 +6,7 @@ make clean
 make
 make install-uv
 
-mkdir testing-tmp
+mkdir -p testing-tmp
 cd testing-tmp
 
 GA=$(realpath ../gssr-analyze.py)
@@ -31,18 +31,18 @@ function test_ga_basic()
     $GA test-report-01
     stat report.pdf
 
-    mkdir -p test-report-01/step_0
+    mkdir -p test-report-01/nocluster_0/step_0
     $GA test-report-01
 
-    touch test-report-01/step_0/proc_0.meta.txt
+    touch test-report-01/nocluster_0/step_0/proc_0.meta.txt
     $GA test-report-01
 }
 
 function test_00_sleep()
 {
     $GR -o -- sleep
-    $GR -o test-report-00 sleep 5 && cat test-report-00/step_0/proc_0.{csv,meta.txt}
-    $GR -o test-report-00 -- sleep 5 && cat test-report-00/step_0/proc_0.{csv,meta.txt}
+    $GR -o test-report-00 sleep 5 && cat test-report-00/nocluster_0/step_0/proc_0.{csv,meta.txt}
+    $GR -o test-report-00 -- sleep 5 && cat test-report-00/nocluster_0/step_0/proc_0.{csv,meta.txt}
 }
 
 function test_00_dir_permission()
@@ -51,14 +51,26 @@ function test_00_dir_permission()
     ls -ld $SCRATCH/gssr-test
 }
 
+function test_00_dir_name()
+{
+    $GR -o $SCRATCH/gssr-test -- sleep 1
+    ls -ld $SCRATCH/gssr-test
+}
+
 function test_01_dcgmproftester()
 {
-    srun -N2 -n6 $GR -o test-report-01 /usr/bin/dcgmproftester12 -t 1006 -d 20 \
-        && $GA test-report-01 -o test-report-01.pdf
+    rm -rf test-report-01
+    srun -N2 -n6 $GR -o test-report-01 /usr/bin/dcgmproftester12 -t 1006 -d 20 
+    ls -ltr
+    $GA test-report-01 -o test-report-01.pdf
 }
 
 function test_02_dcgmproftester()
 {
+    rm -rf test-report-02a
+    rm -rf test-report-02b
+    rm -rf test-report-02c
+
     srun -N1 -n1 -t 00:01:00 $GR -o test-report-02a /usr/bin/dcgmproftester12 -t 1006 -d 240 
     $GA test-report-02a -o test-report-02a.pdf
 
@@ -69,14 +81,29 @@ function test_02_dcgmproftester()
     $GA test-report-02c -o test-report-02c.pdf
 }
 
+function test_01_multireport()
+{
+    rm -rf test-report-01
+    srun -N2 -n6 $GR -o test-report-01 /usr/bin/dcgmproftester12 -t 1006 -d 20 
+    srun -N2 -n6 $GR -o test-report-01 /usr/bin/dcgmproftester12 -t 1006 -d 20 
+    srun -N2 -n6 $GR -o test-report-01 /usr/bin/dcgmproftester12 -t 1006 -d 20 
+    ls -ltr test-report-01
+    $GA test-report-01 -o test-report-01-multi.pdf
+    for d in $(ls test-report-01); do
+        $GA test-report-01/$d -o test-report-01.pdf
+    done
+}
+
 function test_03_signal()
 {
+    rm -rf test-report-03
     srun -N1 -n1 --signal=HUP@30 -t 00:01:00 $GR -o test-report-03 /usr/bin/dcgmproftester12 -t 1006 -d 240
     $GA test-report-03 -o test-report-03.pdf
 }
 
 function test_04_long_running()
 {
+    rm -rf test-report-04
     srun -N3 -n3 -t 00:30:00 $GR -o test-report-04 /usr/bin/dcgmproftester12 -t 1006 -d 3600 
     $GA test-report-04 -o test-report-04.pdf
 }
@@ -90,6 +117,7 @@ function test_05_sphexa()
 
 function test_06_mps_wrapper()
 {
+    rm -rf test-report-06
     srun -N1 -n32 -t 00:05:00 ./mps-wrapper.sh $GR -o test-report-06 /usr/bin/dcgmproftester12 -t 1006 -d 60 
     $GA test-report-06 -o test-report-06.pdf
 }
@@ -109,6 +137,7 @@ srun ./mps-wrapper.sh $GR -o test-report-07 /usr/bin/dcgmproftester12 -t 1006 -d
 srun ./mps-wrapper.sh $GR -o test-report-07 /usr/bin/dcgmproftester12 -t 1007 -d 120 
 EOF
 
+    rm -rf test-report-07
     sbatch -W test-report-07.sh
     $GA test-report-07 -o test-report-07.pdf
 }
@@ -189,6 +218,7 @@ EOF
 #test_ga_basic
 #test_00_sleep
 #test_01_dcgmproftester
+test_01_multireport
 #test_02_dcgmproftester
 #test_03_signal
 #test_04_long_running
@@ -198,4 +228,4 @@ EOF
 #test_container
 #test_08_concurrent_srun
 #test_00_dir_permission
-test_09_overlapping_srun
+#test_09_overlapping_srun

@@ -631,7 +631,7 @@ void warnfs(char *msg, __fsword_t fstype)
 // ==========================================================================
 // create_output_location - Create the appropriate path and output file
 //
-// Attempt to create "report_<jobid>/step_<step>/proc_<procid>.csv" which
+// Attempt to create "report_<cluster>_<jobid>/step_<step>/proc_<procid>.csv" which
 // may require making the parent and sub-directories first.
 //
 // csvfp - Updated with the opened records file
@@ -674,11 +674,11 @@ int create_output_location(FILE **csvfp, FILE **metafp, jobenv_t *jobenv, cmdarg
 
     if (args->outdir)
     {
-        ret = asprintf(&dirname, "%s/step_%s", args->outdir, jobenv->slurm_step);
+        ret = asprintf(&dirname, "%s/%s_%s/step_%s", args->outdir, jobenv->slurm_cluster, jobenv->slurm_jobid, jobenv->slurm_step);
     }
     else
     {
-        ret = asprintf(&dirname, "report_%s/step_%s", jobenv->slurm_jobid, jobenv->slurm_step);
+        ret = asprintf(&dirname, "gssr_report/%s_%s/step_%s", jobenv->slurm_cluster, jobenv->slurm_jobid, jobenv->slurm_step);
     }
     if (ret < 0)
     {
